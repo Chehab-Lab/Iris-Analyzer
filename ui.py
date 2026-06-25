@@ -111,6 +111,7 @@ def render_result(r: IrisResult, eye_side: str) -> None:
 
     df = analysis.result_to_df(r, eye_side)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
     dl1, dl2 = st.columns(2)
     with dl1:
         st.download_button(
