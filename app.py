@@ -332,18 +332,15 @@ def inject_css() -> None:
         [data-testid="stFileUploaderDropzone"]:hover {
             background:var(--accent-h); border-color:var(--accent-h);
         }
-        [data-testid="stFileUploaderDropzone"] > span,
-        [data-testid="stFileUploaderDropzoneInstructions"] {display:none;}
+        /* hide ALL dropzone contents (icon, file chip, name, size, "+"),
+           leaving only our label below */
+        [data-testid="stFileUploaderDropzone"] * {display:none !important;}
         [data-testid="stFileUploaderDropzone"]::after {
             content:"Upload image"; color:#fff; font-weight:500; font-size:.9rem;
         }
-        /* hide everything except the button: file name, size, delete, list */
+        /* hide any file list rendered as a sibling of the dropzone */
         [data-testid="stFileUploaderFile"],
-        [data-testid="stFileUploaderFileName"],
-        [data-testid="stFileUploaderFileData"],
-        [data-testid="stFileUploaderDeleteBtn"],
-        [data-testid="stFileUploader"] ul,
-        [data-testid="stFileUploader"] small {display:none !important;}
+        [data-testid="stFileUploader"] ul {display:none !important;}
 
         /* dataframe */
         [data-testid="stDataFrame"] {border:1px solid var(--border); border-radius:10px;}
