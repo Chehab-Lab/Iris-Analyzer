@@ -417,6 +417,66 @@ def png_bytes_from_gray(img) -> bytes:
     return enc.tobytes() if ok else b""
 
 
+_EYE_CASCADE = None
+
+
+def _get_eye_cascade():
+    """Lazy-load OpenCV's bundled Haar eye detector (no extra dependency)."""
+    global _EYE_CASCADE
+    if _EYE_CASCADE is None:
+        try:
+            _EYE_CASCADE = cv2.CascadeClassifier(
+                cv2.data.haarcascades + "haarcascade_eye.xml"
+            )
+            if _EYE_CASCADE.empty():
+                _EYE_CASCADE = False
+        except Exception:
+            _EYE_CASCADE = False
+    return _EYE_CASCADE or None
+
+
+def crop_to_eye(img):
+    """Crop a wide/full-face frame down to the eye so the iris fills the frame.
+
+    open-iris expects close-up iris images. In a webcam selfie the eye is a small
+    fraction of the frame, which makes the limbus regression unstable (a huge,
+    skewed iris ellipse). We detect the eye and crop tightly around it, then
+    upscale, so the model sees a proper close-up. This is a no-op when no eye is
+    found or the eye already fills the frame (e.g. an uploaded iris close-up).
+    """
+    cascade = _get_eye_cascade()
+    if cascade is None:
+        return img
+    try:
+        eyes = cascade.detectMultiScale(img, scaleFactor=1.1, minNeighbors=6,
+                                        minSize=(40, 40))
+    except Exception:
+        return img
+    if len(eyes) == 0:
+        return img
+
+    x, y, w, h = max(eyes, key=lambda e: e[2] * e[3])
+    H, W = img.shape[:2]
+    if w * h >= 0.18 * W * H:
+        return img  # already a close-up — leave it alone
+
+    cx, cy = x + w / 2.0, y + h / 2.0
+    side = max(w, h) * 2.4  # margin so the whole iris/limbus is inside the crop
+    x0, y0 = int(max(0, cx - side / 2)), int(max(0, cy - side / 2))
+    x1, y1 = int(min(W, cx + side / 2)), int(min(H, cy + side / 2))
+    crop = img[y0:y1, x0:x1]
+    if crop.size == 0:
+        return img
+
+    # upscale small crops so segmentation has enough pixels to work with
+    longest = max(crop.shape[:2])
+    if longest < 640:
+        scale = 640.0 / longest
+        crop = cv2.resize(crop, (int(crop.shape[1] * scale), int(crop.shape[0] * scale)),
+                          interpolation=cv2.INTER_CUBIC)
+    return crop
+
+
 # ============================================================================
 #  Single-image entry point
 # ============================================================================
@@ -424,8 +484,9 @@ def analyze_one(image_bytes: bytes, name: str, eye_side: str) -> IrisResult:
     """Decode + analyze one image and return a populated IrisResult."""
     res = IrisResult(name=name)
     try:
-        img, w, h = load_grayscale(image_bytes, max_dimension=MAX_DIM)
-        res.width, res.height = w, h
+        img, _, _ = load_grayscale(image_bytes, max_dimension=MAX_DIM)
+        img = crop_to_eye(img)  # close-up the eye for webcam/wide frames
+        res.width, res.height = img.shape[1], img.shape[0]
         res.original_png = png_bytes_from_gray(img)
         out = analyze_iris_image(img, eye_side=eye_side)
         if "error" in out:
