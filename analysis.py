@@ -477,15 +477,34 @@ def crop_to_eye(img):
     return crop
 
 
+def _enhance_contrast(img):
+    """Boost local contrast (CLAHE) so the pupil/iris separate better.
+
+    Visible-light webcam frames have weak pupil↔iris contrast (a dark iris is
+    almost as dark as the pupil), which makes the engine mistake the iris for the
+    pupil. Contrast-limited adaptive histogram equalization stretches local
+    contrast, helping segmentation. Used only for webcam captures; uploaded
+    (typically NIR) images are left untouched.
+    """
+    try:
+        clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
+        return clahe.apply(img)
+    except Exception:
+        return img
+
+
 # ============================================================================
 #  Single-image entry point
 # ============================================================================
-def analyze_one(image_bytes: bytes, name: str, eye_side: str) -> IrisResult:
+def analyze_one(image_bytes: bytes, name: str, eye_side: str,
+                enhance_contrast: bool = False) -> IrisResult:
     """Decode + analyze one image and return a populated IrisResult."""
     res = IrisResult(name=name)
     try:
         img, _, _ = load_grayscale(image_bytes, max_dimension=MAX_DIM)
         img = crop_to_eye(img)  # close-up the eye for webcam/wide frames
+        if enhance_contrast:
+            img = _enhance_contrast(img)
         res.width, res.height = img.shape[1], img.shape[0]
         res.original_png = png_bytes_from_gray(img)
         out = analyze_iris_image(img, eye_side=eye_side)

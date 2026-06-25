@@ -131,8 +131,8 @@ def render_result(r: IrisResult, eye_side: str) -> None:
         )
 
 
-def _collect_image() -> tuple[Optional[bytes], str, str]:
-    """Render the controls and return (image_bytes, image_name, eye_side).
+def _collect_image() -> tuple[Optional[bytes], str, str, bool]:
+    """Render the controls and return (image_bytes, image_name, eye_side, from_camera).
 
     The camera's open/closed state lives in the URL (?cam=1) rather than in
     session_state: granting camera permission requires a page reload, which
@@ -168,6 +168,7 @@ def _collect_image() -> tuple[Optional[bytes], str, str]:
 
     image_bytes: Optional[bytes] = None
     image_name = "captured.png"
+    from_camera = False
 
     if up is not None:
         image_bytes = up.getvalue()
@@ -182,11 +183,12 @@ def _collect_image() -> tuple[Optional[bytes], str, str]:
         if shot is not None:
             image_bytes = shot
             image_name = "captured.jpg"
+            from_camera = True
         else:
             st.caption("After clicking **Allow** for camera access, reload the page — "
                        "the camera will stay open and start working.")
 
-    return image_bytes, image_name, eye_side
+    return image_bytes, image_name, eye_side, from_camera
 
 
 def render_footer() -> None:
@@ -204,14 +206,15 @@ def render_footer() -> None:
 
 def render_analyzer() -> None:
     """The main tool: input controls and the analysis result."""
-    image_bytes, image_name, eye_side = _collect_image()
+    image_bytes, image_name, eye_side, from_camera = _collect_image()
 
     if not analysis.ENGINE_READY:
         st.caption("Analysis engine is not available in this environment.")
 
     if image_bytes and analysis.ENGINE_READY:
         with st.spinner("Analyzing…"):
-            result = analysis.analyze_one(image_bytes, image_name, eye_side)
+            result = analysis.analyze_one(image_bytes, image_name, eye_side,
+                                          enhance_contrast=from_camera)
         render_result(result, eye_side)
 
 
@@ -230,6 +233,17 @@ def render_about() -> None:
             dilation that is independent of image scale.</p>
             <p>Pick the eye side, provide an image, and the app returns an annotated
             overlay together with the numeric measurements, both downloadable.</p>
+        </div>
+
+        <div class="iris-card disclaimer">
+            <h3>⚠️ Disclaimer</h3>
+            <p>The iris detection engine expects a <b>high-resolution, near-the-eye</b>
+            shot — ideally a sharp, near-infrared close-up of a single eye. It is most
+            reliable with uploaded close-up iris images.</p>
+            <p>Be cautious when using the <b>camera</b>: in ordinary (visible) light or
+            from a distance the engine can struggle and may confuse the iris with the
+            pupil, giving inaccurate measurements. For trustworthy results, get the eye
+            close to the camera, well-lit and in focus.</p>
         </div>
         """,
         unsafe_allow_html=True,
