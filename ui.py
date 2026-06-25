@@ -284,11 +284,23 @@ def render_analyzer() -> None:
 
     if not analysis.ENGINE_READY:
         st.caption("Analysis engine is not available in this environment.")
+        return
+    if not image_bytes:
+        return
 
-    if image_bytes and analysis.ENGINE_READY:
+    # Detection (the iris pipeline) is expensive — cache it per image+eye so that
+    # nudging only redoes the cheap computation (overlay + IPR) in render_result,
+    # never the full analysis again.
+    cache_key = (hash(image_bytes), eye_side)
+    cached = st.session_state.get("analysis_cache")
+    if not cached or cached.get("key") != cache_key:
         with st.spinner("Analyzing…"):
             result = analysis.analyze_one(image_bytes, image_name, eye_side)
-        render_result(result, eye_side)
+        st.session_state["analysis_cache"] = {"key": cache_key, "result": result}
+    else:
+        result = cached["result"]
+
+    render_result(result, eye_side)
 
 
 def render_about() -> None:

@@ -286,14 +286,15 @@ def render_circle_overlay(base_png_bytes, pupil_xy, pupil_radius,
     ax.plot(iris_xy[0], iris_xy[1], "o", color="#7c3aed", markersize=6, label="Iris center")
     ax.plot(pupil_xy[0], pupil_xy[1], "o", color="#dc2626", markersize=6, label="Pupil center")
 
-    ax.set_title("Adjusted pupil & iris boundaries", color="#1f2937")
+    ax.set_title("Pupil & iris boundaries", color="#1f2937")
     leg = ax.legend(facecolor="#ffffff", edgecolor="#e5e7eb", labelcolor="#1f2937")
     for txt in leg.get_texts():
         txt.set_color("#1f2937")
     ax.axis("off")
 
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", bbox_inches="tight", dpi=200, facecolor="#ffffff")
+    # Lower dpi keeps each nudge redraw snappy (this overlay is re-rendered live).
+    fig.savefig(buf, format="png", bbox_inches="tight", dpi=110, facecolor="#ffffff")
     plt.close(fig)
     buf.seek(0)
     return buf.read()
