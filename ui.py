@@ -160,14 +160,14 @@ def _collect_image() -> tuple[Optional[bytes], str, str]:
 
 
 def render_footer() -> None:
-    """Bottom credit line linking to Chehab Lab."""
+    """Bottom credit line; only the Chehab Lab logo links to the site."""
     logo = _logo_data_uri()
     badge = (f'<img src="{logo}" alt="Chehab Lab" />' if logo
              else '<span class="lab">Chehab Lab</span>')
     st.markdown(
-        f'<a class="iris-footer" href="{CHEHAB_LAB_URL}" target="_blank" '
-        f'rel="noopener noreferrer">Made with <span class="heart">❤</span> '
-        f'by {badge} @ 2026</a>',
+        f'<div class="iris-footer">Made with <span class="heart">❤</span> by '
+        f'<a href="{CHEHAB_LAB_URL}" target="_blank" rel="noopener noreferrer">'
+        f'{badge}</a> @ 2026</div>',
         unsafe_allow_html=True,
     )
 

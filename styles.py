@@ -155,11 +155,12 @@ def inject_css() -> None:
             display:flex; align-items:center; justify-content:center; gap:7px;
             margin:38px 0 14px; padding-top:18px;
             border-top:1px solid var(--border);
-            color:var(--text-dim); font-size:.85rem; text-decoration:none;
+            color:var(--text-dim); font-size:.85rem;
         }
-        .iris-footer:hover {color:var(--text);}
         .iris-footer .heart {color:#e0245e; font-size:.95rem;}
-        .iris-footer img {height:20px; width:auto; vertical-align:middle; border:none !important;}
+        .iris-footer a {display:inline-flex; align-items:center; text-decoration:none;}
+        .iris-footer img {height:20px; width:auto; vertical-align:middle; border:none !important; cursor:pointer;}
+        .iris-footer a:hover img {opacity:.8;}
         .iris-footer .lab {font-weight:600; color:var(--text);}
         </style>
         """,
