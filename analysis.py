@@ -195,12 +195,40 @@ def _redirect_iris_model_cache() -> None:
         pass
 
 
+def _install_contour_keep_largest() -> None:
+    """Make open-iris tolerate fragmented segmentation masks.
+
+    open-iris's ``ContouringAlgorithm`` raises
+    ``VectorizationError: Number of contours must be equal to 1`` whenever a
+    class mask (pupil / iris) breaks into more than one blob — common on
+    visible-light webcam frames where reflections or eyelashes split the mask.
+    We extend its contour filtering so that, when several contours survive, only
+    the single largest-area one is kept. This yields the exactly-one contour the
+    pipeline requires instead of crashing. No-op if open-iris internals change.
+    """
+    try:
+        from iris.nodes.vectorization.contouring import ContouringAlgorithm
+
+        original = ContouringAlgorithm._filter_contours
+
+        def _filter_contours_keep_largest(self, contours):
+            filtered = original(self, contours)
+            if filtered and len(filtered) > 1:
+                filtered = [max(filtered, key=lambda c: cv2.contourArea(c))]
+            return filtered
+
+        ContouringAlgorithm._filter_contours = _filter_contours_keep_largest
+    except Exception:
+        pass
+
+
 IRIS_ERR = ""
 try:
     _clear_execstack_flag()
     import iris
 
     _redirect_iris_model_cache()
+    _install_contour_keep_largest()
     IRIS_OK = True
 except Exception as _e:  # pragma: no cover
     iris = None
