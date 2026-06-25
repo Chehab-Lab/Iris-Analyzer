@@ -1,0 +1,106 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  html, body {margin:0; padding:0;}
+  body {
+    font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color:#1f2937;
+  }
+  .wrap {display:flex; flex-direction:column; gap:8px;}
+  video {
+    width:100%; max-height:520px; background:#000;
+    border:1px solid #e5e7eb; border-radius:10px;
+  }
+  .row {display:flex; gap:8px; align-items:center;}
+  button {
+    font:inherit; font-weight:500; border-radius:8px; padding:.55rem 1rem;
+    cursor:pointer; border:1px solid #2563eb; background:#2563eb; color:#fff;
+    transition:background .12s ease;
+  }
+  button:hover {background:#1d4ed8;}
+  button.sec {background:#fff; color:#1f2937; border-color:#d1d5db;}
+  button.sec:hover {background:#f7f8fa;}
+  .hint {font-size:.8rem; color:#6b7280;}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <video id="video" autoplay playsinline muted></video>
+    <div class="row">
+      <button id="capture">Capture photo</button>
+      <span class="hint" id="hint">Starting camera…</span>
+    </div>
+  </div>
+
+<script>
+  // ---- Streamlit component protocol (vanilla, no React) ----
+  function _send(type, data) {
+    window.parent.postMessage(Object.assign({ isStreamlitMessage: true, type: type }, data), "*");
+  }
+  function ready()        { _send("streamlit:componentReady", { apiVersion: 1 }); }
+  function setHeight(h)   { _send("streamlit:setFrameHeight", { height: h }); }
+  function setValue(v)    { _send("streamlit:setComponentValue", { value: v, dataType: "json" }); }
+
+  const video   = document.getElementById("video");
+  const capture = document.getElementById("capture");
+  const hint    = document.getElementById("hint");
+
+  let started = false;
+
+  function reportHeight() {
+    setHeight(document.body.scrollHeight + 8);
+  }
+
+  async function startCamera() {
+    try {
+      // Ask for the highest resolution the device can provide.
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: {
+          facingMode: "user",
+          width:  { ideal: 4096 },
+          height: { ideal: 2160 },
+        },
+      });
+      video.srcObject = stream;
+      await video.play();
+      const track = stream.getVideoTracks()[0];
+      const s = track.getSettings ? track.getSettings() : {};
+      hint.textContent = "Live: " + (s.width || video.videoWidth) + "×" + (s.height || video.videoHeight) +
+                         " — click Capture photo";
+    } catch (e) {
+      hint.textContent = "Camera error: " + (e && e.message ? e.message : e) +
+                         ". Allow camera access, then reload.";
+    }
+    reportHeight();
+  }
+
+  capture.addEventListener("click", function () {
+    if (!video.videoWidth) { return; }
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;     // native capture resolution
+    canvas.height = video.videoHeight;
+    canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
+    setValue(dataUrl);
+    hint.textContent = "Captured " + canvas.width + "×" + canvas.height +
+                       " — capture again to retake";
+  });
+
+  // Streamlit sends "streamlit:render" after the component is ready.
+  window.addEventListener("message", function (event) {
+    if (event.data && event.data.type === "streamlit:render" && !started) {
+      started = true;
+      startCamera();
+    }
+  });
+
+  video.addEventListener("loadedmetadata", reportHeight);
+  window.addEventListener("resize", reportHeight);
+  ready();
+  reportHeight();
+</script>
+</body>
+</html>

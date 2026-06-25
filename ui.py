@@ -16,11 +16,30 @@ from pathlib import Path
 from typing import Optional
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 import analysis
 from analysis import IrisResult
 
 CHEHAB_LAB_URL = "https://chehablab.com"
+
+# Custom component: capture a webcam frame at the camera's highest resolution
+# (st.camera_input only captures the browser's default stream size).
+_camera_hires = components.declare_component(
+    "camera_hires",
+    path=str(Path(__file__).parent / "components" / "camera_hires"),
+)
+
+
+def hires_camera(key: str = "camera") -> Optional[bytes]:
+    """Render the hi-res webcam component; return JPEG bytes once captured."""
+    data_url = _camera_hires(key=key, default=None)
+    if not data_url or "," not in data_url:
+        return None
+    try:
+        return base64.b64decode(data_url.split(",", 1)[1])
+    except Exception:
+        return None
 
 
 @lru_cache(maxsize=2)
@@ -158,10 +177,10 @@ def _collect_image() -> tuple[Optional[bytes], str, str]:
             st.rerun()
 
     if cam_on:
-        shot = st.camera_input("Take a photo", label_visibility="collapsed", key="camera")
+        shot = hires_camera(key="camera")
         if shot is not None:
-            image_bytes = shot.getvalue()
-            image_name = "captured.png"
+            image_bytes = shot
+            image_name = "captured.jpg"
         else:
             st.caption("After clicking **Allow** for camera access, reload the page — "
                        "the camera will stay open and start working.")
