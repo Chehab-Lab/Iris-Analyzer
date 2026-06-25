@@ -43,53 +43,84 @@ try:
 except Exception:  # pragma: no cover
     _CV2_OK = False
 
-def _clear_execstack_flag() -> None:
-    """Clear the executable-stack bit on the onnxruntime native extension.
+_EXECSTACK_LOG: list[str] = []
 
-    The ``onnxruntime==1.16.3`` wheels (hard-pinned by ``open-iris``) ship the
-    pybind extension with ``PT_GNU_STACK`` marked executable. Hardened kernels
-    (e.g. Streamlit Cloud) refuse to ``dlopen`` such a library:
 
-        ImportError: ... cannot enable executable stack as shared object
-        requires: Invalid argument
-
-    This patches the ELF in place — the pure-Python equivalent of
-    ``execstack -c`` — *before* the library is loaded. It is idempotent and
-    silently no-ops on any platform where it does not apply (e.g. Windows).
-    """
+def _patch_so_execstack(so: str) -> str:
+    """Clear PT_GNU_STACK's executable bit on one ELF64 .so. Returns a status."""
     PT_GNU_STACK = 0x6474E551
     PF_X = 0x1
+    try:
+        with open(so, "rb") as f:
+            data = bytearray(f.read())
+    except Exception as e:
+        return f"read-fail ({e.__class__.__name__})"
+    if data[:4] != b"\x7fELF" or data[4] != 2:
+        return "not-elf64"
+    e_phoff = struct.unpack_from("<Q", data, 0x20)[0]
+    e_phentsize = struct.unpack_from("<H", data, 0x36)[0]
+    e_phnum = struct.unpack_from("<H", data, 0x38)[0]
+    changed = False
+    found = False
+    for i in range(e_phnum):
+        off = e_phoff + i * e_phentsize
+        if struct.unpack_from("<I", data, off)[0] != PT_GNU_STACK:
+            continue
+        found = True
+        p_flags = struct.unpack_from("<I", data, off + 4)[0]
+        if p_flags & PF_X:
+            struct.pack_into("<I", data, off + 4, p_flags & ~PF_X)
+            changed = True
+    if not found:
+        return "no-gnu-stack"
+    if not changed:
+        return "already-clean"
+    # Persist the patched bytes (make writable first if needed).
+    try:
+        try:
+            os.chmod(so, 0o755)
+        except Exception:
+            pass
+        with open(so, "rb+") as f:
+            f.seek(0)
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        return "patched-ok"
+    except Exception as e:
+        # Read-only install dir: rewrite atomically via a temp file + replace.
+        try:
+            tmp = so + ".patched"
+            with open(tmp, "wb") as f:
+                f.write(data)
+            os.replace(tmp, so)
+            return "patched-via-replace"
+        except Exception as e2:
+            return f"write-fail ({e.__class__.__name__}/{e2.__class__.__name__})"
 
-    roots = {sysconfig.get_paths().get("purelib", "")}
-    roots.add(os.path.join(os.path.dirname(np.__file__), os.pardir))
+
+def _clear_execstack_flag() -> None:
+    """Find and de-exec-stack the onnxruntime native extension(s).
+
+    onnxruntime==1.16.3 (hard-pinned by open-iris) ships its pybind .so with
+    PT_GNU_STACK marked executable, which hardened kernels (Streamlit Cloud)
+    refuse to dlopen. This is the pure-Python equivalent of `execstack -c`,
+    run *before* the library is imported.
+    """
+    roots = {
+        sysconfig.get_paths().get("purelib", ""),
+        sysconfig.get_paths().get("platlib", ""),
+        os.path.normpath(os.path.join(os.path.dirname(np.__file__), os.pardir)),
+    }
     targets: list[str] = []
     for root in filter(None, roots):
-        targets += glob(os.path.join(root, "onnxruntime", "capi", "*.so"))
-
+        targets += glob(os.path.join(root, "onnxruntime", "**", "*.so"),
+                        recursive=True)
+    targets = sorted(set(targets))
+    if not targets:
+        _EXECSTACK_LOG.append("no onnxruntime .so found in: " + ", ".join(sorted(filter(None, roots))))
     for so in targets:
-        try:
-            with open(so, "rb+") as f:
-                data = bytearray(f.read())
-                if data[:4] != b"\x7fELF" or data[4] != 2:  # ELF64 only
-                    continue
-                e_phoff = struct.unpack_from("<Q", data, 0x20)[0]
-                e_phentsize = struct.unpack_from("<H", data, 0x36)[0]
-                e_phnum = struct.unpack_from("<H", data, 0x38)[0]
-                changed = False
-                for i in range(e_phnum):
-                    off = e_phoff + i * e_phentsize
-                    if struct.unpack_from("<I", data, off)[0] != PT_GNU_STACK:
-                        continue
-                    p_flags = struct.unpack_from("<I", data, off + 4)[0]
-                    if p_flags & PF_X:
-                        struct.pack_into("<I", data, off + 4, p_flags & ~PF_X)
-                        changed = True
-                if changed:
-                    f.seek(0)
-                    f.write(data)
-                    f.flush()
-        except Exception:
-            pass  # best-effort; the import below will report if it still fails
+        _EXECSTACK_LOG.append(f"{os.path.basename(so)}: {_patch_so_execstack(so)}")
 
 
 _IRIS_ERR = ""
@@ -498,6 +529,9 @@ with st.sidebar:
     if _IRIS_ERR:
         with st.expander("Why is `iris` unavailable?", expanded=True):
             st.code(_IRIS_ERR, language="text")
+            if _EXECSTACK_LOG:
+                st.caption("exec-stack patch log")
+                st.code("\n".join(_EXECSTACK_LOG), language="text")
     st.divider()
     st.caption("Iris Analyzer · scientific batch tool")
 
