@@ -9,13 +9,29 @@ processing of its own.
 
 from __future__ import annotations
 
+import base64
 from datetime import datetime
+from functools import lru_cache
+from pathlib import Path
 from typing import Optional
 
 import streamlit as st
 
 import analysis
 from analysis import IrisResult
+
+CHEHAB_LAB_URL = "https://chehablab.com"
+
+
+@lru_cache(maxsize=1)
+def _logo_data_uri() -> str:
+    """Return the Chehab Lab logo as an inline base64 data URI (cached)."""
+    try:
+        logo = Path(__file__).parent / "assets" / "chehab-lab-logo.png"
+        b64 = base64.b64encode(logo.read_bytes()).decode("ascii")
+        return f"data:image/png;base64,{b64}"
+    except Exception:
+        return ""
 
 
 def render_navbar() -> None:
@@ -143,8 +159,21 @@ def _collect_image() -> tuple[Optional[bytes], str, str]:
     return image_bytes, image_name, eye_side
 
 
+def render_footer() -> None:
+    """Bottom credit line linking to Chehab Lab."""
+    logo = _logo_data_uri()
+    badge = (f'<img src="{logo}" alt="Chehab Lab" />' if logo
+             else '<span class="lab">Chehab Lab</span>')
+    st.markdown(
+        f'<a class="iris-footer" href="{CHEHAB_LAB_URL}" target="_blank" '
+        f'rel="noopener noreferrer">Made with <span class="heart">❤</span> '
+        f'by {badge} @ 2026</a>',
+        unsafe_allow_html=True,
+    )
+
+
 def run() -> None:
-    """Render the whole app: nav bar, controls, then the result."""
+    """Render the whole app: nav bar, controls, result, then the footer."""
     render_navbar()
 
     image_bytes, image_name, eye_side = _collect_image()
@@ -156,3 +185,5 @@ def run() -> None:
         with st.spinner("Analyzing…"):
             result = analysis.analyze_one(image_bytes, image_name, eye_side)
         render_result(result, eye_side)
+
+    render_footer()

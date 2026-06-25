@@ -149,6 +149,18 @@ def inject_css() -> None:
 
         /* images */
         [data-testid="stImage"] img {border:1px solid var(--border); border-radius:10px;}
+
+        /* ---- Footer ---- */
+        .iris-footer {
+            display:flex; align-items:center; justify-content:center; gap:7px;
+            margin:38px 0 14px; padding-top:18px;
+            border-top:1px solid var(--border);
+            color:var(--text-dim); font-size:.85rem; text-decoration:none;
+        }
+        .iris-footer:hover {color:var(--text);}
+        .iris-footer .heart {color:#e0245e; font-size:.95rem;}
+        .iris-footer img {height:20px; width:auto; vertical-align:middle; border:none !important;}
+        .iris-footer .lab {font-weight:600; color:var(--text);}
         </style>
         """,
         unsafe_allow_html=True,
