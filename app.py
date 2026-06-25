@@ -680,8 +680,13 @@ def render_result(r: IrisResult, eye_side: str) -> None:
 # ============================================================================
 #  App layout — eye-side dropdown + two input buttons, then results
 # ============================================================================
-st.session_state.setdefault("show_camera", False)
 st.session_state.setdefault("uploader_key", 0)
+
+# Whether the camera is shown is stored in the URL (?cam=1) rather than in
+# session_state. Granting camera permission requires a page reload, which wipes
+# session_state — but the URL survives, so the camera stays visible and works
+# after the reload instead of disappearing.
+cam_on = st.query_params.get("cam") == "1"
 
 set_col, up_col, cam_col = st.columns([1.4, 1, 1])
 with set_col:
@@ -697,10 +702,14 @@ with up_col:
     )
 with cam_col:
     st.markdown("<div style='height:1.75rem'></div>", unsafe_allow_html=True)
-    if st.button("Take an image", use_container_width=True, type="primary"):
-        # switching to camera clears any previously uploaded image / result
-        st.session_state["show_camera"] = True
-        st.session_state["uploader_key"] += 1
+    label = "Close camera" if cam_on else "Take an image"
+    if st.button(label, use_container_width=True, type="primary"):
+        if cam_on:
+            del st.query_params["cam"]
+        else:
+            # opening the camera clears any previously uploaded image / result
+            st.query_params["cam"] = "1"
+            st.session_state["uploader_key"] += 1
         st.rerun()
 
 image_bytes: Optional[bytes] = None
@@ -710,14 +719,14 @@ if up is not None:
     image_bytes = up.getvalue()
     image_name = up.name
 
-if st.session_state["show_camera"]:
-    shot = st.camera_input("Take a photo", label_visibility="collapsed")
+if cam_on:
+    shot = st.camera_input("Take a photo", label_visibility="collapsed", key="camera")
     if shot is not None:
         image_bytes = shot.getvalue()
         image_name = "captured.png"
     else:
-        st.caption("If the camera doesn't appear, allow camera access for this "
-                   "site in your browser, then reload.")
+        st.caption("After clicking **Allow** for camera access, reload the page — "
+                   "the camera will stay open and start working.")
 
 if not _ENGINE_READY:
     st.caption("Analysis engine is not available in this environment.")
