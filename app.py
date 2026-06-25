@@ -184,7 +184,7 @@ st.set_page_config(
     page_title="Iris Analyzer",
     page_icon="\U0001F441",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 
@@ -221,43 +221,35 @@ def inject_css() -> None:
 
         /* Hide default Streamlit chrome */
         #MainMenu, header[data-testid="stHeader"], footer {visibility: hidden;}
-        .block-container {padding-top: 1.4rem; max-width: 1320px;}
+        section[data-testid="stSidebar"] {display: none;}
+        .block-container {padding-top: 5.6rem; max-width: 1320px;}
 
-        /* Sidebar */
-        section[data-testid="stSidebar"] {
-            background: linear-gradient(180deg, var(--bg-soft), var(--bg));
-            border-right: 1px solid var(--border);
+        /* ---- Top nav bar ---- */
+        .iris-nav {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 999;
+            display: flex; align-items: center; gap: 12px;
+            height: 60px; padding: 0 28px;
+            background: rgba(11,15,23,.82);
+            backdrop-filter: blur(14px);
+            border-bottom: 1px solid var(--border);
         }
-        section[data-testid="stSidebar"] * {color: var(--text);}
-
-        /* ---- Hero header ---- */
-        .iris-hero {
-            border: 1px solid var(--border);
-            border-radius: 18px;
-            padding: 26px 30px;
-            background:
-                linear-gradient(135deg, rgba(124,131,255,.10), rgba(77,208,225,.04)),
-                var(--panel);
-            box-shadow: 0 18px 50px -30px rgba(0,0,0,.9);
-            margin-bottom: 22px;
+        .iris-nav .brand {
+            display: flex; align-items: center; gap: 11px;
+            font-size: 1.18rem; font-weight: 700; letter-spacing: -.3px;
         }
-        .iris-hero h1 {
-            font-size: 1.85rem; font-weight: 700; margin: 0;
-            letter-spacing: -.5px;
+        .iris-nav .brand .glyph {
+            font-size: 1.35rem;
+            filter: drop-shadow(0 0 10px rgba(77,208,225,.45));
+        }
+        .iris-nav .brand .name {
             background: linear-gradient(90deg, var(--accent), var(--accent-2));
             -webkit-background-clip: text; -webkit-text-fill-color: transparent;
         }
-        .iris-hero p {color: var(--text-dim); margin: 8px 0 0; font-size: .95rem;}
-        .iris-chip {
-            display:inline-flex; align-items:center; gap:7px;
-            font-family:'JetBrains Mono', monospace; font-size:.72rem;
-            color: var(--accent); border:1px solid var(--border);
-            background: rgba(77,208,225,.06);
-            padding:4px 11px; border-radius:999px; margin-right:8px;
+        .iris-nav .tag {
+            margin-left: 4px; color: var(--text-dim);
+            font-size: .74rem; font-family: 'JetBrains Mono', monospace;
+            border-left: 1px solid var(--border); padding-left: 12px;
         }
-        .dot {width:7px;height:7px;border-radius:50%;display:inline-block;}
-        .dot.on{background:var(--good);box-shadow:0 0 8px var(--good);}
-        .dot.off{background:var(--bad);box-shadow:0 0 8px var(--bad);}
 
         /* ---- Cards ---- */
         .iris-card {
@@ -548,95 +540,37 @@ def build_zip(results: list[IrisResult], df: pd.DataFrame) -> bytes:
 
 
 # ============================================================================
-#  Sidebar
-# ============================================================================
-with st.sidebar:
-    st.markdown("### ⚙️  Configuration")
-    eye_side = st.radio("Eye side", ["right", "left"], horizontal=True,
-                        help="Side passed to the IRIS pipeline.")
-    max_dim = st.slider("Max image dimension (px)", 400, 1600, 800, 50,
-                        help="Larger images are downscaled before analysis.")
-    st.divider()
-    st.markdown("### \U0001F9EA  Engine status")
-    st.markdown(
-        f"<span class='pill {'ok' if _IRIS_OK else 'err'}'>"
-        f"iris {'ready' if _IRIS_OK else 'missing'}</span> &nbsp;"
-        f"<span class='pill {'ok' if _CV2_OK else 'err'}'>"
-        f"opencv {'ready' if _CV2_OK else 'missing'}</span>",
-        unsafe_allow_html=True,
-    )
-    if not (_IRIS_OK and _CV2_OK):
-        st.caption("Install dependencies: `pip install -r requirements.txt`")
-    if _IRIS_ERR:
-        with st.expander("Why is `iris` unavailable?", expanded=True):
-            st.code(_IRIS_ERR, language="text")
-            if _EXECSTACK_LOG:
-                st.caption("exec-stack patch log")
-                st.code("\n".join(_EXECSTACK_LOG), language="text")
-    st.divider()
-    st.caption("Iris Analyzer · scientific batch tool")
-
-
-# ============================================================================
-#  Hero
+#  Navigation bar
 # ============================================================================
 st.markdown(
-    f"""
-    <div class="iris-hero">
-        <h1>Iris Analyzer</h1>
-        <p>Batch reflection-removal, segmentation and Iris-to-Pupil-Ratio (IPR)
-           estimation for near-infrared iris imagery.</p>
-        <div style="margin-top:14px;">
-            <span class="iris-chip">
-                <span class="dot {'on' if _IRIS_OK else 'off'}"></span> IRIS pipeline
-            </span>
-            <span class="iris-chip">
-                <span class="dot {'on' if _CV2_OK else 'off'}"></span> OpenCV inpainting
-            </span>
-            <span class="iris-chip">IPR = iris_radius / pupil_radius</span>
+    """
+    <div class="iris-nav">
+        <div class="brand">
+            <span class="glyph">\U0001F441</span>
+            <span class="name">Iris Analyzer</span>
         </div>
+        <span class="tag">batch IPR analysis</span>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
-
-# ============================================================================
-#  Upload
-# ============================================================================
-st.markdown('<div class="iris-card"><h3>1 · Upload iris images</h3>',
-            unsafe_allow_html=True)
-files = st.file_uploader(
-    "Drop one or more IR iris images",
-    type=["png", "jpg", "jpeg", "bmp", "tif", "tiff"],
-    accept_multiple_files=True,
-    label_visibility="collapsed",
-)
-col_a, col_b = st.columns([1, 3])
-with col_a:
-    run = st.button("▶  Analyze", use_container_width=True,
-                    disabled=not files or not (_IRIS_OK and _CV2_OK))
-with col_b:
-    if files:
-        st.markdown(
-            f"<div style='padding-top:.55rem;color:var(--text-dim);'>"
-            f"{len(files)} image(s) queued · eye side <b>{eye_side}</b></div>",
-            unsafe_allow_html=True,
-        )
-st.markdown("</div>", unsafe_allow_html=True)
+_ENGINE_READY = _IRIS_OK and _CV2_OK
+_MAX_DIM = 1000  # fixed internal downscale guard (no user-facing setting)
 
 
 # ============================================================================
-#  Run analysis
+#  Batch processing
 # ============================================================================
-if run and files:
+def run_batch(files, eye_side: str) -> list[IrisResult]:
     results: list[IrisResult] = []
     progress = st.progress(0.0, text="Starting…")
     for idx, f in enumerate(files, 1):
-        progress.progress(idx / len(files), text=f"Analyzing {f.name} ({idx}/{len(files)})")
+        progress.progress(idx / len(files),
+                          text=f"Analyzing {f.name} ({idx}/{len(files)})")
         res = IrisResult(name=f.name)
         try:
-            img, w, h = load_grayscale(f.getvalue(), max_dimension=max_dim)
+            img, w, h = load_grayscale(f.getvalue(), max_dimension=_MAX_DIM)
             res.width, res.height = w, h
             res.original_png = png_bytes_from_gray(img)
             out = analyze_iris_image(img, eye_side=eye_side)
@@ -654,22 +588,73 @@ if run and files:
             res.error = str(e)
         results.append(res)
     progress.empty()
-    st.session_state["results"] = results
+    return results
 
 
 # ============================================================================
-#  Results
+#  New-batch screen
 # ============================================================================
-results: list[IrisResult] = st.session_state.get("results", [])
+def render_new_batch() -> None:
+    st.markdown('<div class="iris-card"><h3>Upload a batch of iris images</h3>',
+                unsafe_allow_html=True)
+    files = st.file_uploader(
+        "Drop one or more IR iris images",
+        type=["png", "jpg", "jpeg", "bmp", "tif", "tiff"],
+        accept_multiple_files=True,
+        label_visibility="collapsed",
+        key=f"uploader_{st.session_state['batch_seq']}",
+    )
+    c1, c2, c3 = st.columns([1.2, 1, 2])
+    with c1:
+        eye_side = st.radio("Eye side", ["right", "left"], horizontal=True)
+    with c2:
+        run = st.button("▶  Analyze batch", use_container_width=True,
+                        disabled=not files or not _ENGINE_READY)
+    with c3:
+        if files:
+            st.markdown(
+                f"<div style='padding-top:1.9rem;color:var(--text-dim);'>"
+                f"{len(files)} image(s) queued</div>",
+                unsafe_allow_html=True,
+            )
+    if not _ENGINE_READY:
+        st.caption("Analysis engine is not available in this environment.")
+    st.markdown("</div>", unsafe_allow_html=True)
 
-if results:
+    if run and files:
+        seq = st.session_state["batch_seq"]
+        results = run_batch(files, eye_side)
+        st.session_state["batches"].append({
+            "id": seq,
+            "label": f"Batch {seq} · {datetime.now():%H:%M:%S}",
+            "stamp": datetime.now().strftime("%Y%m%d_%H%M%S"),
+            "results": results,
+        })
+        st.session_state["batch_seq"] += 1
+        st.toast(f"Batch {seq} analyzed — open its tab above.", icon="✅")
+        st.rerun()
+
+    if not st.session_state["batches"]:
+        st.markdown(
+            "<div class='iris-card' style='text-align:center;color:var(--text-dim);'>"
+            "Upload images and press <b>Analyze batch</b>. Every batch you run is "
+            "kept as its own tab so you can revisit earlier results.</div>",
+            unsafe_allow_html=True,
+        )
+
+
+# ============================================================================
+#  Batch results screen
+# ============================================================================
+def render_batch(batch: dict) -> None:
+    results: list[IrisResult] = batch["results"]
     ok_n = sum(r.ok for r in results)
     err_n = len(results) - ok_n
     iprs = [r.ipr for r in results if r.ok and np.isfinite(r.ipr)]
     mean_ipr = float(np.mean(iprs)) if iprs else float("nan")
 
     # ---- summary band ----
-    st.markdown('<div class="iris-card"><h3>2 · Summary</h3>', unsafe_allow_html=True)
+    st.markdown('<div class="iris-card"><h3>Summary</h3>', unsafe_allow_html=True)
     st.markdown(
         f"""
         <div class="metric-grid">
@@ -687,18 +672,27 @@ if results:
     )
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # ---- per-image tabs ----
-    st.markdown('<div class="iris-card"><h3>3 · Per-image results</h3>',
-                unsafe_allow_html=True)
-    tabs = st.tabs([f"{i:02d} · {r.name}" for i, r in enumerate(results, 1)])
-    for tab, r in zip(tabs, results):
-        with tab:
+    # ---- IPR plot ----
+    ok_results = [r for r in results if r.ok and np.isfinite(r.ipr)]
+    if ok_results:
+        st.markdown('<div class="iris-card"><h3>IPR by image</h3>',
+                    unsafe_allow_html=True)
+        chart_df = pd.DataFrame(
+            {"IPR": [r.ipr for r in ok_results]},
+            index=[r.name for r in ok_results],
+        )
+        st.bar_chart(chart_df, color="#4dd0e1", use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    # ---- overlay gallery ----
+    st.markdown('<div class="iris-card"><h3>Overlays</h3>', unsafe_allow_html=True)
+    cols = st.columns(2, gap="large")
+    for i, r in enumerate(results):
+        with cols[i % 2]:
             if r.ok:
-                c1, c2 = st.columns([3, 2], gap="large")
-                with c1:
-                    st.image(r.overlay_png, use_container_width=True,
-                             caption="Annotated overlay")
-                with c2:
+                st.image(r.overlay_png, use_container_width=True,
+                         caption=f"{r.name} — IPR {r.ipr:.4f}")
+                with st.expander("Measurements"):
                     st.markdown(
                         f"""
                         <div class="metric-grid">
@@ -708,61 +702,64 @@ if results:
                                 <div class="value">{r.iris_radius:.1f}<span class="unit"> px</span></div></div>
                             <div class="metric"><div class="label">Pupil radius</div>
                                 <div class="value">{r.pupil_radius:.1f}<span class="unit"> px</span></div></div>
-                            <div class="metric"><div class="label">Iris center</div>
-                                <div class="value" style="font-size:1rem">{r.iris_center[0]:.0f}, {r.iris_center[1]:.0f}</div></div>
-                            <div class="metric"><div class="label">Pupil center</div>
-                                <div class="value" style="font-size:1rem">{r.pupil_center[0]:.0f}, {r.pupil_center[1]:.0f}</div></div>
                             <div class="metric"><div class="label">Resolution</div>
                                 <div class="value" style="font-size:1rem">{r.width}×{r.height}</div></div>
                         </div>
                         """,
                         unsafe_allow_html=True,
                     )
+            elif r.original_png:
+                st.image(r.original_png, use_container_width=True,
+                         caption=f"{r.name} — not analyzed")
             else:
-                st.markdown(
-                    f"<span class='pill err'>analysis failed</span>",
-                    unsafe_allow_html=True,
-                )
-                st.error(r.error or "Unknown error")
-                if r.original_png:
-                    st.image(r.original_png, width=320, caption="Source image")
+                st.markdown(f"**{r.name}** — not analyzed")
     st.markdown("</div>", unsafe_allow_html=True)
 
     # ---- results table ----
     df = build_results_df(results)
-    st.markdown('<div class="iris-card"><h3>4 · Results table</h3>',
+    st.markdown('<div class="iris-card"><h3>Results table</h3>',
                 unsafe_allow_html=True)
     st.dataframe(df, use_container_width=True, hide_index=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # ---- download ----
-    st.markdown('<div class="iris-card"><h3>5 · Export</h3>', unsafe_allow_html=True)
+    # ---- export ----
+    st.markdown('<div class="iris-card"><h3>Export</h3>', unsafe_allow_html=True)
     zip_bytes = build_zip(results, df)
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    stamp = batch["stamp"]
     cda, cdb = st.columns(2)
     with cda:
         st.download_button(
             "⬇  Download ZIP (images + results.csv)",
             data=zip_bytes,
-            file_name=f"iris_analysis_{stamp}.zip",
+            file_name=f"iris_batch{batch['id']}_{stamp}.zip",
             mime="application/zip",
             use_container_width=True,
+            key=f"zip_{batch['id']}",
         )
     with cdb:
         st.download_button(
             "⬇  Download results.csv only",
             data=df.to_csv(index=False).encode("utf-8"),
-            file_name=f"iris_results_{stamp}.csv",
+            file_name=f"iris_batch{batch['id']}_{stamp}.csv",
             mime="text/csv",
             use_container_width=True,
+            key=f"csv_{batch['id']}",
         )
-    st.caption("ZIP layout:  Images/NN_name.png  +  results.csv  +  README.txt")
     st.markdown("</div>", unsafe_allow_html=True)
 
-else:
-    st.markdown(
-        "<div class='iris-card' style='text-align:center;color:var(--text-dim);'>"
-        "Upload images and press <b>Analyze</b> to see overlays, metrics and the "
-        "downloadable export here.</div>",
-        unsafe_allow_html=True,
-    )
+
+# ============================================================================
+#  App layout — New Batch tab + one tab per saved batch
+# ============================================================================
+st.session_state.setdefault("batches", [])
+st.session_state.setdefault("batch_seq", 1)
+
+_batches = st.session_state["batches"]
+_tab_labels = ["➕  New Batch"] + [b["label"] for b in reversed(_batches)]
+_tabs = st.tabs(_tab_labels)
+
+with _tabs[0]:
+    render_new_batch()
+for _tab, _batch in zip(_tabs[1:], reversed(_batches)):
+    with _tab:
+        render_batch(_batch)
