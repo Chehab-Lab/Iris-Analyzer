@@ -106,13 +106,13 @@ def inject_css() -> None:
             font-size:.92rem; line-height:1.5;
             transition: background .12s ease, border-color .12s ease;
         }
-        /* Streamlit nests the label in a <p>/<div> with its own weight — force it
-           to match the Upload-image button label exactly. */
-        .stButton>button p,
-        .stButton>button div {
+        /* Streamlit nests the label in a <p>/<div>/<span> with its own weight —
+           force every part to match the Upload-image button label exactly. */
+        .stButton>button,
+        .stButton>button * {
             font-weight:500 !important; font-size:.92rem !important; line-height:1.5 !important;
-            margin:0;
         }
+        .stButton>button p {margin:0;}
         /* active source = solid blue */
         .stButton>button[kind="primary"] {
             background: var(--accent); color:#fff; border:1px solid var(--accent);
@@ -141,9 +141,10 @@ def inject_css() -> None:
 
         /* file uploader rendered as a single solid button (no dropzone box) */
         [data-testid="stFileUploader"] > label {display:none;}
+        [data-testid="stFileUploader"] {width:100% !important;}
         [data-testid="stFileUploaderDropzone"] {
-            display:flex; align-items:center; justify-content:center;
-            min-height:0; padding:.55rem 1rem; cursor:pointer;
+            display:flex !important; align-items:center !important; justify-content:center !important;
+            width:100% !important; min-height:0; padding:.55rem 1rem; cursor:pointer;
             background:var(--accent); border:1px solid var(--accent); border-radius:8px;
         }
         [data-testid="stFileUploaderDropzone"]:hover {
@@ -153,8 +154,9 @@ def inject_css() -> None:
            leaving only our label below */
         [data-testid="stFileUploaderDropzone"] * {display:none !important;}
         [data-testid="stFileUploaderDropzone"]::after {
-            content:"Upload image"; color:#fff; font-weight:500;
-            font-size:.92rem; line-height:1.5;
+            content:"Upload image"; color:#fff; font-weight:500 !important;
+            font-size:.92rem !important; line-height:1.5 !important;
+            width:100%; text-align:center;
         }
         /* hide any file list rendered as a sibling of the dropzone */
         [data-testid="stFileUploaderFile"],
