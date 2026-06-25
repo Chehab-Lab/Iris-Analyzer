@@ -626,14 +626,11 @@ def analyze_one(image_bytes: bytes, name: str, eye_side: str) -> IrisResult:
 
 def render_result(r: IrisResult, eye_side: str) -> None:
     if not r.ok:
-        st.markdown('<div class="iris-card"><h3>Result</h3>', unsafe_allow_html=True)
         st.error(r.error or "Analysis failed.")
         if r.original_png:
             st.image(r.original_png, use_container_width=True, caption="Source image")
-        st.markdown("</div>", unsafe_allow_html=True)
         return
 
-    st.markdown('<div class="iris-card"><h3>Result</h3>', unsafe_allow_html=True)
     img_col, data_col = st.columns([3, 2], gap="large")
     with img_col:
         st.image(r.overlay_png, use_container_width=True,
@@ -658,7 +655,6 @@ def render_result(r: IrisResult, eye_side: str) -> None:
             """,
             unsafe_allow_html=True,
         )
-    st.markdown("</div>", unsafe_allow_html=True)
 
     df = result_to_df(r, eye_side)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
