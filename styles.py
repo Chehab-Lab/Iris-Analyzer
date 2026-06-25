@@ -144,6 +144,10 @@ def inject_css() -> None:
         /* segmented radio (the one setting) */
         div[role="radiogroup"] {gap:8px;}
 
+        /* nudge controls under the result image */
+        .nudge-label {padding-top:.5rem; font-size:.85rem; color:var(--text);}
+        .nudge-val {padding-top:.5rem; text-align:center; font-size:.9rem; font-weight:600; color:var(--text);}
+
         /* file uploader rendered as a single solid button (no dropzone box) */
         [data-testid="stFileUploader"] > label {display:none;}
         [data-testid="stFileUploader"] {width:100% !important;}

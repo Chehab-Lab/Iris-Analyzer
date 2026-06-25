@@ -76,47 +76,110 @@ def render_navbar(page: str) -> None:
     )
 
 
+def _clamp(value: float, lo: float, hi: float) -> float:
+    return float(min(max(value, lo), hi))
+
+
+def _nudge(label: str, key: str, lo: float, hi: float, step: float = 1.0) -> None:
+    """A label with −/+ buttons that nudge a session_state value within [lo, hi]."""
+    c0, c1, c2, c3 = st.columns([3, 1, 1.4, 1])
+    c0.markdown(f"<div class='nudge-label'>{label}</div>", unsafe_allow_html=True)
+    dec = c1.button("−", key=f"{key}_dec", use_container_width=True)
+    val = c2.empty()
+    inc = c3.button("+", key=f"{key}_inc", use_container_width=True)
+    if dec:
+        st.session_state[key] = _clamp(st.session_state[key] - step, lo, hi)
+    if inc:
+        st.session_state[key] = _clamp(st.session_state[key] + step, lo, hi)
+    val.markdown(f"<div class='nudge-val'>{st.session_state[key]:.0f}</div>",
+                 unsafe_allow_html=True)
+
+
 def render_result(r: IrisResult, eye_side: str) -> None:
-    """Show the overlay, metric tiles and download buttons for one result."""
+    """Show the (adjustable) overlay, nudge controls, metrics and downloads."""
     if not r.ok:
         st.error(r.error or "Analysis failed.")
         if r.original_png:
             st.image(r.original_png, use_container_width=True, caption="Source image")
         return
 
-    img_col, data_col = st.columns([3, 2], gap="large")
-    with img_col:
+    if not r.original_png:
         st.image(r.overlay_png, use_container_width=True,
                  caption="Pupil & iris boundaries")
-    with data_col:
-        st.markdown(
-            f"""
-            <div class="metric-grid">
-                <div class="metric hl"><div class="label">IPR</div>
-                    <div class="value">{r.ipr:.4f}</div></div>
-                <div class="metric"><div class="label">Eye side</div>
-                    <div class="value" style="font-size:1.1rem">{eye_side.title()}</div></div>
-                <div class="metric"><div class="label">Iris radius</div>
-                    <div class="value">{r.iris_radius:.1f}<span class="unit"> px</span></div></div>
-                <div class="metric"><div class="label">Pupil radius</div>
-                    <div class="value">{r.pupil_radius:.1f}<span class="unit"> px</span></div></div>
-                <div class="metric"><div class="label">Iris center</div>
-                    <div class="value" style="font-size:1rem">{r.iris_center[0]:.0f}, {r.iris_center[1]:.0f}</div></div>
-                <div class="metric"><div class="label">Pupil center</div>
-                    <div class="value" style="font-size:1rem">{r.pupil_center[0]:.0f}, {r.pupil_center[1]:.0f}</div></div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        return
 
-    df = analysis.result_to_df(r, eye_side)
+    w, h = max(1, int(r.width)), max(1, int(r.height))
+    rmax = float(max(w, h))
+
+    # Seed the adjustable values to the detected ones whenever the result changes.
+    sig = f"{w}x{h}|{r.pupil_center}|{r.pupil_radius}|{r.iris_center}|{r.iris_radius}"
+    if st.session_state.get("adj_sig") != sig:
+        st.session_state["adj_sig"] = sig
+        st.session_state["adj_pcx"] = _clamp(r.pupil_center[0], 0.0, w)
+        st.session_state["adj_pcy"] = _clamp(r.pupil_center[1], 0.0, h)
+        st.session_state["adj_pr"] = _clamp(r.pupil_radius, 1.0, rmax)
+        st.session_state["adj_icx"] = _clamp(r.iris_center[0], 0.0, w)
+        st.session_state["adj_icy"] = _clamp(r.iris_center[1], 0.0, h)
+        st.session_state["adj_ir"] = _clamp(r.iris_radius, 1.0, rmax)
+
+    img_col, data_col = st.columns([3, 2], gap="large")
+    img_ph = img_col.empty()
+    metrics_ph = data_col.empty()
+
+    # Nudge controls, directly under the image.
+    with img_col:
+        st.caption("Nudge the centers and radii (± 1 px) to refine the boundaries.")
+        pcol, icol = st.columns(2)
+        with pcol:
+            st.markdown("**Pupil**")
+            _nudge("Center X", "adj_pcx", 0.0, float(w))
+            _nudge("Center Y", "adj_pcy", 0.0, float(h))
+            _nudge("Radius", "adj_pr", 1.0, rmax)
+        with icol:
+            st.markdown("**Iris**")
+            _nudge("Center X", "adj_icx", 0.0, float(w))
+            _nudge("Center Y", "adj_icy", 0.0, float(h))
+            _nudge("Radius", "adj_ir", 1.0, rmax)
+
+    pcx, pcy, pr = st.session_state["adj_pcx"], st.session_state["adj_pcy"], st.session_state["adj_pr"]
+    icx, icy, ir = st.session_state["adj_icx"], st.session_state["adj_icy"], st.session_state["adj_ir"]
+    overlay = analysis.render_circle_overlay(r.original_png, (pcx, pcy), pr, (icx, icy), ir)
+    ipr = ir / pr if pr > 0 else 0.0
+
+    img_ph.image(overlay, use_container_width=True, caption="Pupil & iris boundaries")
+    metrics_ph.markdown(
+        f"""
+        <div class="metric-grid">
+            <div class="metric hl"><div class="label">IPR</div>
+                <div class="value">{ipr:.4f}</div></div>
+            <div class="metric"><div class="label">Eye side</div>
+                <div class="value" style="font-size:1.1rem">{eye_side.title()}</div></div>
+            <div class="metric"><div class="label">Iris radius</div>
+                <div class="value">{ir:.1f}<span class="unit"> px</span></div></div>
+            <div class="metric"><div class="label">Pupil radius</div>
+                <div class="value">{pr:.1f}<span class="unit"> px</span></div></div>
+            <div class="metric"><div class="label">Iris center</div>
+                <div class="value" style="font-size:1rem">{icx:.0f}, {icy:.0f}</div></div>
+            <div class="metric"><div class="label">Pupil center</div>
+                <div class="value" style="font-size:1rem">{pcx:.0f}, {pcy:.0f}</div></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    csv = (
+        "image,eye_side,ipr,pupil_x,pupil_y,pupil_radius,"
+        "iris_x,iris_y,iris_radius,width,height\n"
+        f"{r.name},{eye_side},{ipr:.5f},{pcx:.3f},{pcy:.3f},{pr:.3f},"
+        f"{icx:.3f},{icy:.3f},{ir:.3f},{w},{h}\n"
+    )
     st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
     dl1, dl2 = st.columns(2)
     with dl1:
         st.download_button(
             "Download overlay (PNG)",
-            data=r.overlay_png,
+            data=overlay,
             file_name=f"iris_overlay_{stamp}.png",
             mime="image/png",
             use_container_width=True,
@@ -124,105 +187,11 @@ def render_result(r: IrisResult, eye_side: str) -> None:
     with dl2:
         st.download_button(
             "Download measurements (CSV)",
-            data=df.to_csv(index=False).encode("utf-8"),
+            data=csv.encode("utf-8"),
             file_name=f"iris_result_{stamp}.csv",
             mime="text/csv",
             use_container_width=True,
         )
-
-    _render_adjuster(r, eye_side)
-
-
-def _clamp(value: float, lo: float, hi: float) -> float:
-    return float(min(max(value, lo), hi))
-
-
-def _render_adjuster(r: IrisResult, eye_side: str) -> None:
-    """Sliders to manually correct each boundary's center and radius, with a live
-    overlay, recomputed IPR, and downloads for the adjusted version."""
-    if not r.original_png:
-        return
-
-    with st.expander("Adjust pupil & iris boundaries"):
-        w, h = max(1, int(r.width)), max(1, int(r.height))
-        rmax = float(max(w, h))
-
-        # (Re)seed slider defaults to the detected values whenever the result changes.
-        sig = f"{w}x{h}|{r.pupil_center}|{r.pupil_radius}|{r.iris_center}|{r.iris_radius}"
-        if st.session_state.get("adj_sig") != sig:
-            st.session_state["adj_sig"] = sig
-            st.session_state["adj_pcx"] = _clamp(r.pupil_center[0], 0.0, w)
-            st.session_state["adj_pcy"] = _clamp(r.pupil_center[1], 0.0, h)
-            st.session_state["adj_pr"] = _clamp(r.pupil_radius, 1.0, rmax)
-            st.session_state["adj_icx"] = _clamp(r.iris_center[0], 0.0, w)
-            st.session_state["adj_icy"] = _clamp(r.iris_center[1], 0.0, h)
-            st.session_state["adj_ir"] = _clamp(r.iris_radius, 1.0, rmax)
-
-        pcol, icol = st.columns(2)
-        with pcol:
-            st.markdown("**Pupil**")
-            pcx = st.slider("Center X", 0.0, float(w), step=1.0, key="adj_pcx")
-            pcy = st.slider("Center Y", 0.0, float(h), step=1.0, key="adj_pcy")
-            pr = st.slider("Radius", 1.0, rmax, step=1.0, key="adj_pr")
-        with icol:
-            st.markdown("**Iris**")
-            icx = st.slider("Center X", 0.0, float(w), step=1.0, key="adj_icx")
-            icy = st.slider("Center Y", 0.0, float(h), step=1.0, key="adj_icy")
-            ir = st.slider("Radius", 1.0, rmax, step=1.0, key="adj_ir")
-
-        overlay = analysis.render_circle_overlay(
-            r.original_png, (pcx, pcy), pr, (icx, icy), ir)
-        ipr = ir / pr if pr > 0 else 0.0
-
-        img_col, data_col = st.columns([3, 2], gap="large")
-        with img_col:
-            st.image(overlay, use_container_width=True, caption="Adjusted boundaries")
-        with data_col:
-            st.markdown(
-                f"""
-                <div class="metric-grid">
-                    <div class="metric hl"><div class="label">IPR (adjusted)</div>
-                        <div class="value">{ipr:.4f}</div></div>
-                    <div class="metric"><div class="label">Iris radius</div>
-                        <div class="value">{ir:.1f}<span class="unit"> px</span></div></div>
-                    <div class="metric"><div class="label">Pupil radius</div>
-                        <div class="value">{pr:.1f}<span class="unit"> px</span></div></div>
-                    <div class="metric"><div class="label">Iris center</div>
-                        <div class="value" style="font-size:1rem">{icx:.0f}, {icy:.0f}</div></div>
-                    <div class="metric"><div class="label">Pupil center</div>
-                        <div class="value" style="font-size:1rem">{pcx:.0f}, {pcy:.0f}</div></div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        csv = (
-            "image,eye_side,ipr,pupil_x,pupil_y,pupil_radius,"
-            "iris_x,iris_y,iris_radius,width,height\n"
-            f"{r.name},{eye_side},{ipr:.5f},{pcx:.3f},{pcy:.3f},{pr:.3f},"
-            f"{icx:.3f},{icy:.3f},{ir:.3f},{w},{h}\n"
-        )
-        st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
-        a1, a2 = st.columns(2)
-        with a1:
-            st.download_button(
-                "Download adjusted overlay (PNG)",
-                data=overlay,
-                file_name=f"iris_overlay_adjusted_{stamp}.png",
-                mime="image/png",
-                use_container_width=True,
-                key="dl_adj_png",
-            )
-        with a2:
-            st.download_button(
-                "Download adjusted measurements (CSV)",
-                data=csv.encode("utf-8"),
-                file_name=f"iris_result_adjusted_{stamp}.csv",
-                mime="text/csv",
-                use_container_width=True,
-                key="dl_adj_csv",
-            )
 
 
 def _collect_image() -> tuple[Optional[bytes], str, str]:
