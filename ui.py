@@ -268,14 +268,15 @@ def render_about() -> None:
 
         <div class="iris-card">
             <h3>API</h3>
-            <p>The same engine is available as a JSON HTTP API (served by the FastAPI
-            backend, <code>api.py</code>), so images can be analyzed programmatically.</p>
+            <p>The same engine is available as a JSON HTTP API served by the app
+            itself, on the <b>same URL</b> as this page — so images can be analyzed
+            programmatically without any separate backend.</p>
             <p><b>POST</b> <code>/api/analyze</code> — multipart form fields:
             <code>image</code> (file), <code>eye_side</code> (<code>right</code> or
             <code>left</code>), and optional <code>include_overlay</code>
             (<code>true</code>/<code>false</code>). <b>GET</b> <code>/api/health</code>
             reports whether the engine is ready.</p>
-            <pre class="api-code">curl -X POST https://YOUR-HOST/api/analyze \\
+            <pre class="api-code">curl -X POST https://&lt;this-app-url&gt;/api/analyze \\
   -F image=@eye.png \\
   -F eye_side=right</pre>
             <p>The response carries the IPR with the pupil/iris radii and centers (and

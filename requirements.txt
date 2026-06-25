@@ -6,6 +6,3 @@ numpy
 pandas
 matplotlib
 open-iris
-fastapi
-uvicorn
-python-multipart
