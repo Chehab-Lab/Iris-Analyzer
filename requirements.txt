@@ -1,6 +1,8 @@
-streamlit>=1.36
-numpy>=1.24
-pandas>=2.0
-opencv-python-headless>=4.8
-matplotlib>=3.7
-open-iris
+# NOTE: open-iris pins onnxruntime==1.16.3, which only has wheels up to
+# Python 3.11. The deployment MUST run on Python 3.11 (see .python-version
+# and the Streamlit Cloud "Advanced settings" Python-version selector).
+streamlit>=1.36,<1.40
+numpy>=1.24,<2
+pandas>=2.0,<2.3
+matplotlib>=3.7,<3.9
+open-iris==1.11.1
