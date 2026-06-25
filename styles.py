@@ -159,6 +159,17 @@ def inject_css() -> None:
 
         /* ---- About page ---- */
         .iris-card p {color:var(--text); font-size:.92rem; line-height:1.55; margin:0 0 10px;}
+        .iris-card code {
+            background:var(--panel-2); border:1px solid var(--border); border-radius:5px;
+            padding:1px 5px; font-size:.85em; color:#1f2937;
+            font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        }
+        .api-code {
+            background:#0b1220; color:#e6edf3; border-radius:8px; padding:12px 14px;
+            font-size:.82rem; line-height:1.5; overflow-x:auto; margin:0 0 12px;
+            font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        }
+        .api-code:last-child {margin-bottom:0;}
         .iris-card p:last-child {margin-bottom:0;}
         .iris-card a {color:var(--accent); text-decoration:none;}
         .iris-card a:hover {text-decoration:underline;}

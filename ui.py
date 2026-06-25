@@ -131,8 +131,8 @@ def render_result(r: IrisResult, eye_side: str) -> None:
         )
 
 
-def _collect_image() -> tuple[Optional[bytes], str, str, bool]:
-    """Render the controls and return (image_bytes, image_name, eye_side, from_camera).
+def _collect_image() -> tuple[Optional[bytes], str, str]:
+    """Render the controls and return (image_bytes, image_name, eye_side).
 
     The camera's open/closed state lives in the URL (?cam=1) rather than in
     session_state: granting camera permission requires a page reload, which
@@ -168,7 +168,6 @@ def _collect_image() -> tuple[Optional[bytes], str, str, bool]:
 
     image_bytes: Optional[bytes] = None
     image_name = "captured.png"
-    from_camera = False
 
     if up is not None:
         image_bytes = up.getvalue()
@@ -185,7 +184,6 @@ def _collect_image() -> tuple[Optional[bytes], str, str, bool]:
         if shot is not None:
             image_bytes = shot
             image_name = "captured.jpg"
-            from_camera = True
         else:
             st.caption("After clicking **Allow** for camera access, reload the page — "
                        "the camera will stay open and start working.")
@@ -208,15 +206,14 @@ def render_footer() -> None:
 
 def render_analyzer() -> None:
     """The main tool: input controls and the analysis result."""
-    image_bytes, image_name, eye_side, from_camera = _collect_image()
+    image_bytes, image_name, eye_side = _collect_image()
 
     if not analysis.ENGINE_READY:
         st.caption("Analysis engine is not available in this environment.")
 
     if image_bytes and analysis.ENGINE_READY:
         with st.spinner("Analyzing…"):
-            result = analysis.analyze_one(image_bytes, image_name, eye_side,
-                                          enhance_contrast=from_camera)
+            result = analysis.analyze_one(image_bytes, image_name, eye_side)
         render_result(result, eye_side)
 
 
@@ -267,6 +264,30 @@ def render_about() -> None:
                     which you can export as a CSV.</p>
                 </div>
             </div>
+        </div>
+
+        <div class="iris-card">
+            <h3>API</h3>
+            <p>The same engine is available as a JSON HTTP API (served by the FastAPI
+            backend, <code>api.py</code>), so images can be analyzed programmatically.</p>
+            <p><b>POST</b> <code>/api/analyze</code> — multipart form fields:
+            <code>image</code> (file), <code>eye_side</code> (<code>right</code> or
+            <code>left</code>), and optional <code>include_overlay</code>
+            (<code>true</code>/<code>false</code>). <b>GET</b> <code>/api/health</code>
+            reports whether the engine is ready.</p>
+            <pre class="api-code">curl -X POST https://YOUR-HOST/api/analyze \\
+  -F image=@eye.png \\
+  -F eye_side=right</pre>
+            <p>The response carries the IPR with the pupil/iris radii and centers (and
+            the annotated overlay as base64 when requested):</p>
+            <pre class="api-code">{{
+  "status": "ok",
+  "ipr": 2.83,
+  "pupil_radius": 41.2,
+  "iris_radius": 116.5,
+  "pupil_center": [312.0, 248.7],
+  "iris_center": [313.4, 249.1]
+}}</pre>
         </div>
 
         <div class="iris-card">
