@@ -130,6 +130,100 @@ def render_result(r: IrisResult, eye_side: str) -> None:
             use_container_width=True,
         )
 
+    _render_adjuster(r, eye_side)
+
+
+def _clamp(value: float, lo: float, hi: float) -> float:
+    return float(min(max(value, lo), hi))
+
+
+def _render_adjuster(r: IrisResult, eye_side: str) -> None:
+    """Sliders to manually correct each boundary's center and radius, with a live
+    overlay, recomputed IPR, and downloads for the adjusted version."""
+    if not r.original_png:
+        return
+
+    with st.expander("Adjust pupil & iris boundaries"):
+        w, h = max(1, int(r.width)), max(1, int(r.height))
+        rmax = float(max(w, h))
+
+        # (Re)seed slider defaults to the detected values whenever the result changes.
+        sig = f"{w}x{h}|{r.pupil_center}|{r.pupil_radius}|{r.iris_center}|{r.iris_radius}"
+        if st.session_state.get("adj_sig") != sig:
+            st.session_state["adj_sig"] = sig
+            st.session_state["adj_pcx"] = _clamp(r.pupil_center[0], 0.0, w)
+            st.session_state["adj_pcy"] = _clamp(r.pupil_center[1], 0.0, h)
+            st.session_state["adj_pr"] = _clamp(r.pupil_radius, 1.0, rmax)
+            st.session_state["adj_icx"] = _clamp(r.iris_center[0], 0.0, w)
+            st.session_state["adj_icy"] = _clamp(r.iris_center[1], 0.0, h)
+            st.session_state["adj_ir"] = _clamp(r.iris_radius, 1.0, rmax)
+
+        pcol, icol = st.columns(2)
+        with pcol:
+            st.markdown("**Pupil**")
+            pcx = st.slider("Center X", 0.0, float(w), step=1.0, key="adj_pcx")
+            pcy = st.slider("Center Y", 0.0, float(h), step=1.0, key="adj_pcy")
+            pr = st.slider("Radius", 1.0, rmax, step=1.0, key="adj_pr")
+        with icol:
+            st.markdown("**Iris**")
+            icx = st.slider("Center X", 0.0, float(w), step=1.0, key="adj_icx")
+            icy = st.slider("Center Y", 0.0, float(h), step=1.0, key="adj_icy")
+            ir = st.slider("Radius", 1.0, rmax, step=1.0, key="adj_ir")
+
+        overlay = analysis.render_circle_overlay(
+            r.original_png, (pcx, pcy), pr, (icx, icy), ir)
+        ipr = ir / pr if pr > 0 else 0.0
+
+        img_col, data_col = st.columns([3, 2], gap="large")
+        with img_col:
+            st.image(overlay, use_container_width=True, caption="Adjusted boundaries")
+        with data_col:
+            st.markdown(
+                f"""
+                <div class="metric-grid">
+                    <div class="metric hl"><div class="label">IPR (adjusted)</div>
+                        <div class="value">{ipr:.4f}</div></div>
+                    <div class="metric"><div class="label">Iris radius</div>
+                        <div class="value">{ir:.1f}<span class="unit"> px</span></div></div>
+                    <div class="metric"><div class="label">Pupil radius</div>
+                        <div class="value">{pr:.1f}<span class="unit"> px</span></div></div>
+                    <div class="metric"><div class="label">Iris center</div>
+                        <div class="value" style="font-size:1rem">{icx:.0f}, {icy:.0f}</div></div>
+                    <div class="metric"><div class="label">Pupil center</div>
+                        <div class="value" style="font-size:1rem">{pcx:.0f}, {pcy:.0f}</div></div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        csv = (
+            "image,eye_side,ipr,pupil_x,pupil_y,pupil_radius,"
+            "iris_x,iris_y,iris_radius,width,height\n"
+            f"{r.name},{eye_side},{ipr:.5f},{pcx:.3f},{pcy:.3f},{pr:.3f},"
+            f"{icx:.3f},{icy:.3f},{ir:.3f},{w},{h}\n"
+        )
+        st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+        a1, a2 = st.columns(2)
+        with a1:
+            st.download_button(
+                "Download adjusted overlay (PNG)",
+                data=overlay,
+                file_name=f"iris_overlay_adjusted_{stamp}.png",
+                mime="image/png",
+                use_container_width=True,
+                key="dl_adj_png",
+            )
+        with a2:
+            st.download_button(
+                "Download adjusted measurements (CSV)",
+                data=csv.encode("utf-8"),
+                file_name=f"iris_result_adjusted_{stamp}.csv",
+                mime="text/csv",
+                use_container_width=True,
+                key="dl_adj_csv",
+            )
+
 
 def _collect_image() -> tuple[Optional[bytes], str, str]:
     """Render the controls and return (image_bytes, image_name, eye_side).
