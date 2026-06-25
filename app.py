@@ -20,7 +20,6 @@ import struct
 import sys
 import sysconfig
 import tempfile
-import zipfile
 from dataclasses import dataclass, field
 from datetime import datetime
 from glob import glob
@@ -221,125 +220,105 @@ st.set_page_config(
 
 
 def inject_css() -> None:
-    """Custom, scientific dark UI — overrides the default Streamlit chrome."""
+    """Clean, light desktop-application UI on a white background."""
     st.markdown(
         """
         <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
-
         :root {
-            --bg:        #0b0f17;
-            --bg-soft:   #111725;
-            --panel:     #151c2c;
-            --panel-2:   #1b2438;
-            --border:    #243049;
-            --text:      #e6ecf5;
-            --text-dim:  #8b97ac;
-            --accent:    #4dd0e1;
-            --accent-2:  #7c83ff;
-            --good:      #34d399;
-            --warn:      #fbbf24;
-            --bad:       #f87171;
+            --bg:        #ffffff;
+            --panel:     #ffffff;
+            --panel-2:   #f7f8fa;
+            --border:    #e5e7eb;
+            --border-2:  #d1d5db;
+            --text:      #1f2937;
+            --text-dim:  #6b7280;
+            --accent:    #2563eb;
+            --accent-h:  #1d4ed8;
+            --good:      #16a34a;
+            --bad:       #dc2626;
         }
 
         .stApp {
-            background:
-                radial-gradient(1200px 600px at 12% -8%, rgba(124,131,255,.10), transparent 60%),
-                radial-gradient(1000px 600px at 110% 0%, rgba(77,208,225,.08), transparent 55%),
-                var(--bg);
+            background: var(--bg);
             color: var(--text);
-            font-family: 'Inter', system-ui, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                         Helvetica, Arial, sans-serif;
         }
 
         /* Hide default Streamlit chrome */
         #MainMenu, header[data-testid="stHeader"], footer {visibility: hidden;}
         section[data-testid="stSidebar"] {display: none;}
-        .block-container {padding-top: 5.6rem; max-width: 1320px;}
+        .block-container {padding-top: 5.2rem; max-width: 900px;}
 
         /* ---- Top nav bar ---- */
         .iris-nav {
             position: fixed; top: 0; left: 0; right: 0; z-index: 999;
-            display: flex; align-items: center; gap: 12px;
-            height: 60px; padding: 0 28px;
-            background: rgba(11,15,23,.82);
-            backdrop-filter: blur(14px);
+            display: flex; align-items: center; gap: 11px;
+            height: 56px; padding: 0 26px;
+            background: #ffffff;
             border-bottom: 1px solid var(--border);
         }
-        .iris-nav .brand {
-            display: flex; align-items: center; gap: 11px;
-            font-size: 1.18rem; font-weight: 700; letter-spacing: -.3px;
-        }
-        .iris-nav .brand .glyph {
-            font-size: 1.35rem;
-            filter: drop-shadow(0 0 10px rgba(77,208,225,.45));
-        }
-        .iris-nav .brand .name {
-            background: linear-gradient(90deg, var(--accent), var(--accent-2));
-            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-        }
-        .iris-nav .tag {
-            margin-left: 4px; color: var(--text-dim);
-            font-size: .74rem; font-family: 'JetBrains Mono', monospace;
-            border-left: 1px solid var(--border); padding-left: 12px;
+        .iris-nav .glyph {font-size: 1.25rem;}
+        .iris-nav .name {
+            font-size: 1.12rem; font-weight: 600; letter-spacing: -.2px;
+            color: var(--text);
         }
 
         /* ---- Cards ---- */
         .iris-card {
             border: 1px solid var(--border);
-            border-radius: 16px;
+            border-radius: 12px;
             background: var(--panel);
-            padding: 18px 20px;
+            padding: 20px 22px;
             margin-bottom: 16px;
+            box-shadow: 0 1px 2px rgba(16,24,40,.04);
         }
         .iris-card h3 {
-            font-size: .82rem; text-transform: uppercase; letter-spacing: 1.4px;
-            color: var(--text-dim); font-weight: 600; margin: 0 0 4px;
+            font-size: .95rem; font-weight: 600; letter-spacing: 0;
+            color: var(--text); margin: 0 0 14px; text-transform: none;
         }
 
         /* ---- Metric tiles ---- */
-        .metric-grid {display:grid; grid-template-columns:repeat(auto-fit,minmax(135px,1fr)); gap:12px;}
+        .metric-grid {display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px;}
         .metric {
-            border:1px solid var(--border); border-radius:13px;
-            background: linear-gradient(180deg, var(--panel-2), var(--panel));
-            padding:14px 16px;
+            border:1px solid var(--border); border-radius:10px;
+            background: var(--panel-2);
+            padding:13px 15px;
         }
-        .metric .label {color:var(--text-dim); font-size:.7rem; text-transform:uppercase; letter-spacing:1px;}
-        .metric .value {font-family:'JetBrains Mono',monospace; font-size:1.45rem; font-weight:600; color:var(--text); margin-top:4px;}
+        .metric .label {color:var(--text-dim); font-size:.72rem; font-weight:500;}
+        .metric .value {font-size:1.4rem; font-weight:600; color:var(--text); margin-top:3px;}
         .metric .unit  {color:var(--text-dim); font-size:.8rem; font-weight:400;}
+        .metric.hl {background:#eff6ff; border-color:#bfdbfe;}
         .metric.hl .value {color:var(--accent);}
 
-        /* status pills */
-        .pill {display:inline-block; padding:3px 10px; border-radius:999px; font-size:.72rem; font-weight:600; font-family:'JetBrains Mono',monospace;}
-        .pill.ok  {background:rgba(52,211,153,.12); color:var(--good); border:1px solid rgba(52,211,153,.3);}
-        .pill.err {background:rgba(248,113,113,.12); color:var(--bad); border:1px solid rgba(248,113,113,.3);}
-
-        /* ---- Buttons ---- */
-        .stButton>button, .stDownloadButton>button {
-            background: linear-gradient(90deg, var(--accent-2), var(--accent));
-            color:#0b0f17; font-weight:600; border:none; border-radius:11px;
-            padding:.6rem 1.1rem; transition: transform .12s ease, box-shadow .12s ease;
+        /* ---- Buttons (flat, desktop-style) ---- */
+        .stButton>button {
+            background: var(--accent); color:#ffffff; font-weight:500;
+            border:1px solid var(--accent); border-radius:8px;
+            padding:.55rem 1rem; transition: background .12s ease;
         }
-        .stButton>button:hover, .stDownloadButton>button:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 10px 24px -12px rgba(77,208,225,.7);
-            color:#0b0f17;
-        }
+        .stButton>button:hover {background: var(--accent-h); border-color: var(--accent-h); color:#fff;}
+        .stButton>button:focus {color:#fff; box-shadow:none;}
 
-        /* uploader */
+        .stDownloadButton>button {
+            background:#ffffff; color:var(--text); font-weight:500;
+            border:1px solid var(--border-2); border-radius:8px; padding:.55rem 1rem;
+        }
+        .stDownloadButton>button:hover {background:var(--panel-2); color:var(--text); border-color:var(--border-2);}
+
+        /* segmented radio (the one setting) */
+        div[role="radiogroup"] {gap:8px;}
+
+        /* uploader / camera */
         [data-testid="stFileUploaderDropzone"] {
-            background: var(--panel); border:1.5px dashed var(--border); border-radius:14px;
+            background: var(--panel-2); border:1.5px dashed var(--border-2); border-radius:10px;
         }
-
-        /* tabs */
-        .stTabs [data-baseweb="tab-list"] {gap:6px; border-bottom:1px solid var(--border);}
-        .stTabs [data-baseweb="tab"] {color:var(--text-dim); font-weight:500;}
-        .stTabs [aria-selected="true"] {color:var(--accent);}
 
         /* dataframe */
-        [data-testid="stDataFrame"] {border:1px solid var(--border); border-radius:12px;}
+        [data-testid="stDataFrame"] {border:1px solid var(--border); border-radius:10px;}
 
-        /* progress bar */
-        .stProgress > div > div > div > div {background: linear-gradient(90deg,var(--accent-2),var(--accent));}
+        /* images */
+        [data-testid="stImage"] img {border:1px solid var(--border); border-radius:10px;}
         </style>
         """,
         unsafe_allow_html=True,
@@ -373,31 +352,31 @@ class IrisResult:
 # ============================================================================
 def _render_overlay(img_cleaned, pupil_xy, pupil_radius, iris_contour, iris_center) -> bytes:
     """Build the annotated matplotlib overlay and return it as PNG bytes."""
-    fig = plt.figure(figsize=(8, 8), facecolor="#0b0f17")
+    fig = plt.figure(figsize=(8, 8), facecolor="#ffffff")
     ax = plt.gca()
     ax.imshow(img_cleaned, cmap="gray")
 
     pupil_x, pupil_y = pupil_xy
     ax.add_patch(
         plt.Circle((pupil_x, pupil_y), pupil_radius, fill=False,
-                   color="#34d399", linewidth=2, label="Pupil circle")
+                   color="#16a34a", linewidth=2, label="Pupil circle")
     )
-    ax.plot(iris_contour[:, 0], iris_contour[:, 1], color="#4dd0e1",
+    ax.plot(iris_contour[:, 0], iris_contour[:, 1], color="#2563eb",
             linewidth=2, label="Iris boundary")
-    ax.plot(iris_center[0], iris_center[1], "o", color="#7c83ff",
+    ax.plot(iris_center[0], iris_center[1], "o", color="#7c3aed",
             markersize=6, label="Iris center")
-    ax.plot(pupil_x, pupil_y, "o", color="#f87171",
+    ax.plot(pupil_x, pupil_y, "o", color="#dc2626",
             markersize=6, label="Pupil center")
 
-    ax.set_title("Pupil & Iris boundaries", color="#e6ecf5")
-    leg = ax.legend(facecolor="#151c2c", edgecolor="#243049", labelcolor="#e6ecf5")
+    ax.set_title("Pupil & Iris boundaries", color="#1f2937")
+    leg = ax.legend(facecolor="#ffffff", edgecolor="#e5e7eb", labelcolor="#1f2937")
     for txt in leg.get_texts():
-        txt.set_color("#e6ecf5")
+        txt.set_color("#1f2937")
     ax.axis("off")
 
     buf = io.BytesIO()
     fig.savefig(buf, format="png", bbox_inches="tight", dpi=200,
-                facecolor="#0b0f17")
+                facecolor="#ffffff")
     plt.close(fig)
     buf.seek(0)
     return buf.read()
@@ -519,56 +498,24 @@ def png_bytes_from_gray(img) -> bytes:
 
 
 # ============================================================================
-#  ZIP packaging
+#  CSV export
 # ============================================================================
-def safe_stem(name: str) -> str:
-    stem = name.rsplit(".", 1)[0]
-    keep = "".join(c if (c.isalnum() or c in "-_") else "_" for c in stem)
-    return keep.strip("_") or "image"
-
-
-def build_results_df(results: list[IrisResult]) -> pd.DataFrame:
-    rows = []
-    for i, r in enumerate(results, 1):
-        rows.append({
-            "index": i,
-            "image": r.name,
-            "status": "ok" if r.ok else "error",
-            "error": r.error or "",
-            "ipr": round(r.ipr, 5) if r.ok else "",
-            "pupil_x": round(r.pupil_center[0], 3) if r.ok else "",
-            "pupil_y": round(r.pupil_center[1], 3) if r.ok else "",
-            "pupil_radius": round(r.pupil_radius, 3) if r.ok else "",
-            "iris_x": round(r.iris_center[0], 3) if r.ok else "",
-            "iris_y": round(r.iris_center[1], 3) if r.ok else "",
-            "iris_radius": round(r.iris_radius, 3) if r.ok else "",
-            "width": r.width,
-            "height": r.height,
-        })
-    return pd.DataFrame(rows)
-
-
-def build_zip(results: list[IrisResult], df: pd.DataFrame) -> bytes:
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        for i, r in enumerate(results, 1):
-            base = f"{i:02d}_{safe_stem(r.name)}"
-            if r.ok and r.overlay_png:
-                zf.writestr(f"Images/{base}.png", r.overlay_png)
-            elif r.original_png:
-                # still ship the source so the folder is complete
-                zf.writestr(f"Images/{base}_FAILED.png", r.original_png)
-        zf.writestr("results.csv", df.to_csv(index=False))
-        zf.writestr(
-            "README.txt",
-            "Iris Analyzer export\n"
-            f"Generated: {datetime.now():%Y-%m-%d %H:%M:%S}\n"
-            f"Images analyzed: {len(results)}\n\n"
-            "Images/  - annotated overlays (one per input image)\n"
-            "results.csv - per-image measurements (IPR, geometry, status)\n",
-        )
-    buf.seek(0)
-    return buf.read()
+def result_to_df(r: IrisResult, eye_side: str) -> pd.DataFrame:
+    return pd.DataFrame([{
+        "image": r.name,
+        "eye_side": eye_side,
+        "status": "ok" if r.ok else "error",
+        "error": r.error or "",
+        "ipr": round(r.ipr, 5) if r.ok else "",
+        "pupil_x": round(r.pupil_center[0], 3) if r.ok else "",
+        "pupil_y": round(r.pupil_center[1], 3) if r.ok else "",
+        "pupil_radius": round(r.pupil_radius, 3) if r.ok else "",
+        "iris_x": round(r.iris_center[0], 3) if r.ok else "",
+        "iris_y": round(r.iris_center[1], 3) if r.ok else "",
+        "iris_radius": round(r.iris_radius, 3) if r.ok else "",
+        "width": r.width,
+        "height": r.height,
+    }])
 
 
 # ============================================================================
@@ -577,11 +524,8 @@ def build_zip(results: list[IrisResult], df: pd.DataFrame) -> bytes:
 st.markdown(
     """
     <div class="iris-nav">
-        <div class="brand">
-            <span class="glyph">\U0001F441</span>
-            <span class="name">Iris Analyzer</span>
-        </div>
-        <span class="tag">batch IPR analysis</span>
+        <span class="glyph">\U0001F441</span>
+        <span class="name">Iris Analyzer</span>
     </div>
     """,
     unsafe_allow_html=True,
@@ -592,206 +536,137 @@ _MAX_DIM = 1000  # fixed internal downscale guard (no user-facing setting)
 
 
 # ============================================================================
-#  Batch processing
+#  Single-image analysis
 # ============================================================================
-def run_batch(files, eye_side: str) -> list[IrisResult]:
-    results: list[IrisResult] = []
-    progress = st.progress(0.0, text="Starting…")
-    for idx, f in enumerate(files, 1):
-        progress.progress(idx / len(files),
-                          text=f"Analyzing {f.name} ({idx}/{len(files)})")
-        res = IrisResult(name=f.name)
-        try:
-            img, w, h = load_grayscale(f.getvalue(), max_dimension=_MAX_DIM)
-            res.width, res.height = w, h
-            res.original_png = png_bytes_from_gray(img)
-            out = analyze_iris_image(img, eye_side=eye_side)
-            if "error" in out:
-                res.error = out["error"]
-            else:
-                res.ok = True
-                res.overlay_png = out["overlay_png"]
-                res.ipr = out["ipr"]
-                res.pupil_center = tuple(out["pupil_center"])
-                res.pupil_radius = out["pupil_radius"]
-                res.iris_center = tuple(out["iris_center"])
-                res.iris_radius = out["iris_radius"]
-        except Exception as e:
-            res.error = str(e)
-        results.append(res)
-    progress.empty()
-    return results
+def analyze_one(image_bytes: bytes, name: str, eye_side: str) -> IrisResult:
+    res = IrisResult(name=name)
+    try:
+        img, w, h = load_grayscale(image_bytes, max_dimension=_MAX_DIM)
+        res.width, res.height = w, h
+        res.original_png = png_bytes_from_gray(img)
+        out = analyze_iris_image(img, eye_side=eye_side)
+        if "error" in out:
+            res.error = out["error"]
+        else:
+            res.ok = True
+            res.overlay_png = out["overlay_png"]
+            res.ipr = out["ipr"]
+            res.pupil_center = tuple(out["pupil_center"])
+            res.pupil_radius = out["pupil_radius"]
+            res.iris_center = tuple(out["iris_center"])
+            res.iris_radius = out["iris_radius"]
+    except Exception as e:
+        res.error = str(e)
+    return res
 
 
-# ============================================================================
-#  New-batch screen
-# ============================================================================
-def render_new_batch() -> None:
-    st.markdown('<div class="iris-card"><h3>Upload a batch of iris images</h3>',
-                unsafe_allow_html=True)
-    files = st.file_uploader(
-        "Drop one or more IR iris images",
-        type=["png", "jpg", "jpeg", "bmp", "tif", "tiff"],
-        accept_multiple_files=True,
-        label_visibility="collapsed",
-        key=f"uploader_{st.session_state['batch_seq']}",
-    )
-    c1, c2, c3 = st.columns([1.2, 1, 2])
-    with c1:
-        eye_side = st.radio("Eye side", ["right", "left"], horizontal=True)
-    with c2:
-        run = st.button("▶  Analyze batch", use_container_width=True,
-                        disabled=not files or not _ENGINE_READY)
-    with c3:
-        if files:
-            st.markdown(
-                f"<div style='padding-top:1.9rem;color:var(--text-dim);'>"
-                f"{len(files)} image(s) queued</div>",
-                unsafe_allow_html=True,
-            )
-    if not _ENGINE_READY:
-        st.caption("Analysis engine is not available in this environment.")
-    st.markdown("</div>", unsafe_allow_html=True)
+def render_result(r: IrisResult, eye_side: str) -> None:
+    if not r.ok:
+        st.markdown('<div class="iris-card"><h3>Result</h3>', unsafe_allow_html=True)
+        st.error(r.error or "Analysis failed.")
+        if r.original_png:
+            st.image(r.original_png, use_container_width=True, caption="Source image")
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
 
-    if run and files:
-        seq = st.session_state["batch_seq"]
-        results = run_batch(files, eye_side)
-        st.session_state["batches"].append({
-            "id": seq,
-            "label": f"Batch {seq} · {datetime.now():%H:%M:%S}",
-            "stamp": datetime.now().strftime("%Y%m%d_%H%M%S"),
-            "results": results,
-        })
-        st.session_state["batch_seq"] += 1
-        st.toast(f"Batch {seq} analyzed — open its tab above.", icon="✅")
-        st.rerun()
-
-    if not st.session_state["batches"]:
+    st.markdown('<div class="iris-card"><h3>Result</h3>', unsafe_allow_html=True)
+    img_col, data_col = st.columns([3, 2], gap="large")
+    with img_col:
+        st.image(r.overlay_png, use_container_width=True,
+                 caption="Pupil & iris boundaries")
+    with data_col:
         st.markdown(
-            "<div class='iris-card' style='text-align:center;color:var(--text-dim);'>"
-            "Upload images and press <b>Analyze batch</b>. Every batch you run is "
-            "kept as its own tab so you can revisit earlier results.</div>",
+            f"""
+            <div class="metric-grid">
+                <div class="metric hl"><div class="label">IPR</div>
+                    <div class="value">{r.ipr:.4f}</div></div>
+                <div class="metric"><div class="label">Eye side</div>
+                    <div class="value" style="font-size:1.1rem">{eye_side.title()}</div></div>
+                <div class="metric"><div class="label">Iris radius</div>
+                    <div class="value">{r.iris_radius:.1f}<span class="unit"> px</span></div></div>
+                <div class="metric"><div class="label">Pupil radius</div>
+                    <div class="value">{r.pupil_radius:.1f}<span class="unit"> px</span></div></div>
+                <div class="metric"><div class="label">Iris center</div>
+                    <div class="value" style="font-size:1rem">{r.iris_center[0]:.0f}, {r.iris_center[1]:.0f}</div></div>
+                <div class="metric"><div class="label">Pupil center</div>
+                    <div class="value" style="font-size:1rem">{r.pupil_center[0]:.0f}, {r.pupil_center[1]:.0f}</div></div>
+            </div>
+            """,
             unsafe_allow_html=True,
         )
-
-
-# ============================================================================
-#  Batch results screen
-# ============================================================================
-def render_batch(batch: dict) -> None:
-    results: list[IrisResult] = batch["results"]
-    ok_n = sum(r.ok for r in results)
-    err_n = len(results) - ok_n
-    iprs = [r.ipr for r in results if r.ok and np.isfinite(r.ipr)]
-    mean_ipr = float(np.mean(iprs)) if iprs else float("nan")
-
-    # ---- summary band ----
-    st.markdown('<div class="iris-card"><h3>Summary</h3>', unsafe_allow_html=True)
-    st.markdown(
-        f"""
-        <div class="metric-grid">
-            <div class="metric"><div class="label">Images</div>
-                <div class="value">{len(results)}</div></div>
-            <div class="metric"><div class="label">Succeeded</div>
-                <div class="value" style="color:var(--good)">{ok_n}</div></div>
-            <div class="metric"><div class="label">Failed</div>
-                <div class="value" style="color:{'var(--bad)' if err_n else 'var(--text)'}">{err_n}</div></div>
-            <div class="metric hl"><div class="label">Mean IPR</div>
-                <div class="value">{mean_ipr:.3f}{'' if iprs else ' <span class=unit>n/a</span>'}</div></div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # ---- IPR plot ----
-    ok_results = [r for r in results if r.ok and np.isfinite(r.ipr)]
-    if ok_results:
-        st.markdown('<div class="iris-card"><h3>IPR by image</h3>',
-                    unsafe_allow_html=True)
-        chart_df = pd.DataFrame(
-            {"IPR": [r.ipr for r in ok_results]},
-            index=[r.name for r in ok_results],
-        )
-        st.bar_chart(chart_df, color="#4dd0e1", use_container_width=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    # ---- overlay gallery ----
-    st.markdown('<div class="iris-card"><h3>Overlays</h3>', unsafe_allow_html=True)
-    cols = st.columns(2, gap="large")
-    for i, r in enumerate(results):
-        with cols[i % 2]:
-            if r.ok:
-                st.image(r.overlay_png, use_container_width=True,
-                         caption=f"{r.name} — IPR {r.ipr:.4f}")
-                with st.expander("Measurements"):
-                    st.markdown(
-                        f"""
-                        <div class="metric-grid">
-                            <div class="metric hl"><div class="label">IPR</div>
-                                <div class="value">{r.ipr:.4f}</div></div>
-                            <div class="metric"><div class="label">Iris radius</div>
-                                <div class="value">{r.iris_radius:.1f}<span class="unit"> px</span></div></div>
-                            <div class="metric"><div class="label">Pupil radius</div>
-                                <div class="value">{r.pupil_radius:.1f}<span class="unit"> px</span></div></div>
-                            <div class="metric"><div class="label">Resolution</div>
-                                <div class="value" style="font-size:1rem">{r.width}×{r.height}</div></div>
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
-            elif r.original_png:
-                st.image(r.original_png, use_container_width=True,
-                         caption=f"{r.name} — not analyzed")
-            else:
-                st.markdown(f"**{r.name}** — not analyzed")
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    # ---- results table ----
-    df = build_results_df(results)
-    st.markdown('<div class="iris-card"><h3>Results table</h3>',
-                unsafe_allow_html=True)
-    st.dataframe(df, use_container_width=True, hide_index=True)
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    # ---- export ----
-    st.markdown('<div class="iris-card"><h3>Export</h3>', unsafe_allow_html=True)
-    zip_bytes = build_zip(results, df)
-    stamp = batch["stamp"]
-    cda, cdb = st.columns(2)
-    with cda:
+    df = result_to_df(r, eye_side)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    dl1, dl2 = st.columns(2)
+    with dl1:
         st.download_button(
-            "⬇  Download ZIP (images + results.csv)",
-            data=zip_bytes,
-            file_name=f"iris_batch{batch['id']}_{stamp}.zip",
-            mime="application/zip",
+            "Download overlay (PNG)",
+            data=r.overlay_png,
+            file_name=f"iris_overlay_{stamp}.png",
+            mime="image/png",
             use_container_width=True,
-            key=f"zip_{batch['id']}",
         )
-    with cdb:
+    with dl2:
         st.download_button(
-            "⬇  Download results.csv only",
+            "Download measurements (CSV)",
             data=df.to_csv(index=False).encode("utf-8"),
-            file_name=f"iris_batch{batch['id']}_{stamp}.csv",
+            file_name=f"iris_result_{stamp}.csv",
             mime="text/csv",
             use_container_width=True,
-            key=f"csv_{batch['id']}",
         )
-    st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ============================================================================
-#  App layout — New Batch tab + one tab per saved batch
+#  App layout — one setting + two input buttons
 # ============================================================================
-st.session_state.setdefault("batches", [])
-st.session_state.setdefault("batch_seq", 1)
+st.session_state.setdefault("input_mode", "upload")
 
-_batches = st.session_state["batches"]
-_tab_labels = ["➕  New Batch"] + [b["label"] for b in reversed(_batches)]
-_tabs = st.tabs(_tab_labels)
+st.markdown('<div class="iris-card"><h3>Analyze an iris image</h3>',
+            unsafe_allow_html=True)
 
-with _tabs[0]:
-    render_new_batch()
-for _tab, _batch in zip(_tabs[1:], reversed(_batches)):
-    with _tab:
-        render_batch(_batch)
+set_col, up_col, cam_col = st.columns([1.4, 1, 1])
+with set_col:
+    eye_side = st.radio("Eye side", ["right", "left"], horizontal=True)
+with up_col:
+    st.markdown("<div style='height:1.7rem'></div>", unsafe_allow_html=True)
+    if st.button("📁  Upload image", use_container_width=True):
+        st.session_state["input_mode"] = "upload"
+with cam_col:
+    st.markdown("<div style='height:1.7rem'></div>", unsafe_allow_html=True)
+    if st.button("📷  Take image", use_container_width=True):
+        st.session_state["input_mode"] = "camera"
+
+image_bytes: Optional[bytes] = None
+image_name = "captured.png"
+
+if st.session_state["input_mode"] == "upload":
+    up = st.file_uploader(
+        "Upload an IR iris image",
+        type=["png", "jpg", "jpeg", "bmp", "tif", "tiff"],
+        accept_multiple_files=False,
+        label_visibility="collapsed",
+    )
+    if up is not None:
+        image_bytes = up.getvalue()
+        image_name = up.name
+else:
+    shot = st.camera_input("Take a photo", label_visibility="collapsed")
+    if shot is not None:
+        image_bytes = shot.getvalue()
+
+if not _ENGINE_READY:
+    st.caption("Analysis engine is not available in this environment.")
+st.markdown("</div>", unsafe_allow_html=True)
+
+if image_bytes and _ENGINE_READY:
+    with st.spinner("Analyzing…"):
+        result = analyze_one(image_bytes, image_name, eye_side)
+    render_result(result, eye_side)
+elif not image_bytes:
+    st.markdown(
+        "<div class='iris-card' style='text-align:center;color:var(--text-dim);'>"
+        "Choose <b>Upload image</b> or <b>Take image</b>, pick the eye side, and the "
+        "analysis appears here.</div>",
+        unsafe_allow_html=True,
+    )
