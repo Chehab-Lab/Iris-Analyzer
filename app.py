@@ -718,6 +718,10 @@ image_name = "captured.png"
 if up is not None:
     image_bytes = up.getvalue()
     image_name = up.name
+    # uploading an image closes the live camera stream
+    if cam_on:
+        del st.query_params["cam"]
+        st.rerun()
 
 if cam_on:
     shot = st.camera_input("Take a photo", label_visibility="collapsed", key="camera")
