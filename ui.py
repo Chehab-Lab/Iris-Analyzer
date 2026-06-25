@@ -180,6 +180,8 @@ def _collect_image() -> tuple[Optional[bytes], str, str, bool]:
 
     if cam_on:
         shot = hires_camera(key="camera")
+        st.caption("The iris detection engine expects in-distribution, high-resolution "
+                   "close-up images of an eye. Use the web-camera results with caution.")
         if shot is not None:
             image_bytes = shot
             image_name = "captured.jpg"
@@ -233,17 +235,6 @@ def render_about() -> None:
             dilation that is independent of image scale.</p>
             <p>Pick the eye side, provide an image, and the app returns an annotated
             overlay together with the numeric measurements, both downloadable.</p>
-        </div>
-
-        <div class="iris-card disclaimer">
-            <h3>⚠️ Disclaimer</h3>
-            <p>The iris detection engine expects a <b>high-resolution, near-the-eye</b>
-            shot — ideally a sharp, near-infrared close-up of a single eye. It is most
-            reliable with uploaded close-up iris images.</p>
-            <p>Be cautious when using the <b>camera</b>: in ordinary (visible) light or
-            from a distance the engine can struggle and may confuse the iris with the
-            pupil, giving inaccurate measurements. For trustworthy results, get the eye
-            close to the camera, well-lit and in focus.</p>
         </div>
         """,
         unsafe_allow_html=True,

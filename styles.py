@@ -158,8 +158,6 @@ def inject_css() -> None:
         [data-testid="stImage"] img {border:1px solid var(--border); border-radius:10px;}
 
         /* ---- About page ---- */
-        .iris-card.disclaimer {border-left:4px solid #f59e0b; background:#fffbeb;}
-        .iris-card.disclaimer h3 {color:#92400e;}
         .iris-card p {color:var(--text); font-size:.92rem; line-height:1.55; margin:0 0 10px;}
         .iris-card p:last-child {margin-bottom:0;}
         .iris-card a {color:var(--accent); text-decoration:none;}
