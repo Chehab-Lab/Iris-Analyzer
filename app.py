@@ -15,8 +15,11 @@ from __future__ import annotations
 
 import io
 import os
+import shutil
 import struct
+import sys
 import sysconfig
+import tempfile
 import zipfile
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -99,28 +102,66 @@ def _patch_so_execstack(so: str) -> str:
             return f"write-fail ({e.__class__.__name__}/{e2.__class__.__name__})"
 
 
-def _clear_execstack_flag() -> None:
-    """Find and de-exec-stack the onnxruntime native extension(s).
-
-    onnxruntime==1.16.3 (hard-pinned by open-iris) ships its pybind .so with
-    PT_GNU_STACK marked executable, which hardened kernels (Streamlit Cloud)
-    refuse to dlopen. This is the pure-Python equivalent of `execstack -c`,
-    run *before* the library is imported.
-    """
+def _onnxruntime_pkg_dir() -> Optional[str]:
     roots = {
         sysconfig.get_paths().get("purelib", ""),
         sysconfig.get_paths().get("platlib", ""),
         os.path.normpath(os.path.join(os.path.dirname(np.__file__), os.pardir)),
     }
-    targets: list[str] = []
     for root in filter(None, roots):
-        targets += glob(os.path.join(root, "onnxruntime", "**", "*.so"),
-                        recursive=True)
-    targets = sorted(set(targets))
-    if not targets:
-        _EXECSTACK_LOG.append("no onnxruntime .so found in: " + ", ".join(sorted(filter(None, roots))))
-    for so in targets:
-        _EXECSTACK_LOG.append(f"{os.path.basename(so)}: {_patch_so_execstack(so)}")
+        cand = os.path.join(root, "onnxruntime")
+        if os.path.isdir(cand):
+            return cand
+    return None
+
+
+def _clear_execstack_flag() -> None:
+    """Ensure the onnxruntime native extension has no executable stack.
+
+    onnxruntime==1.16.3 (hard-pinned by open-iris) ships its pybind .so with
+    PT_GNU_STACK marked executable, which hardened kernels (Streamlit Cloud)
+    refuse to dlopen. On Streamlit Cloud the install dir is read-only at
+    runtime, so we cannot patch in place. Strategy:
+
+      1. Try patching in place (works on writable installs).
+      2. If that fails (read-only), copy the onnxruntime package into a
+         writable temp dir, patch the copy, and prepend it to sys.path so the
+         patched copy is imported instead of the read-only original.
+    """
+    src_pkg = _onnxruntime_pkg_dir()
+    if not src_pkg:
+        _EXECSTACK_LOG.append("onnxruntime package dir not found")
+        return
+
+    # 1) in-place attempt
+    inplace = {}
+    for so in glob(os.path.join(src_pkg, "capi", "*.so")):
+        inplace[os.path.basename(so)] = _patch_so_execstack(so)
+    for k, v in inplace.items():
+        _EXECSTACK_LOG.append(f"inplace {k}: {v}")
+
+    if not any("write-fail" in v for v in inplace.values()):
+        return  # already clean or successfully patched in place
+
+    # 2) writable shadow copy + sys.path shim
+    try:
+        shadow_root = os.path.join(tempfile.gettempdir(), "ort_shadow")
+        dst_pkg = os.path.join(shadow_root, "onnxruntime")
+        marker = os.path.join(dst_pkg, ".execstack_patched")
+        if not os.path.exists(marker):
+            if os.path.isdir(dst_pkg):
+                shutil.rmtree(dst_pkg, ignore_errors=True)
+            os.makedirs(shadow_root, exist_ok=True)
+            shutil.copytree(src_pkg, dst_pkg)
+            for so in glob(os.path.join(dst_pkg, "capi", "*.so")):
+                _EXECSTACK_LOG.append(f"shadow {os.path.basename(so)}: {_patch_so_execstack(so)}")
+            with open(marker, "w") as m:
+                m.write("ok")
+        if shadow_root not in sys.path:
+            sys.path.insert(0, shadow_root)
+        _EXECSTACK_LOG.append(f"shadow active: {shadow_root}")
+    except Exception as e:
+        _EXECSTACK_LOG.append(f"shadow-fail: {e.__class__.__name__}: {e}")
 
 
 _IRIS_ERR = ""
