@@ -293,12 +293,25 @@ def inject_css() -> None:
 
         /* ---- Buttons (flat, desktop-style) ---- */
         .stButton>button {
-            background: var(--accent); color:#ffffff; font-weight:500;
-            border:1px solid var(--accent); border-radius:8px;
-            padding:.55rem 1rem; transition: background .12s ease;
+            font-weight:500; border-radius:8px; padding:.55rem 1rem;
+            transition: background .12s ease, border-color .12s ease;
         }
-        .stButton>button:hover {background: var(--accent-h); border-color: var(--accent-h); color:#fff;}
-        .stButton>button:focus {color:#fff; box-shadow:none;}
+        /* active source = solid blue */
+        .stButton>button[kind="primary"] {
+            background: var(--accent); color:#fff; border:1px solid var(--accent);
+        }
+        .stButton>button[kind="primary"]:hover,
+        .stButton>button[kind="primary"]:focus {
+            background: var(--accent-h); border-color: var(--accent-h); color:#fff; box-shadow:none;
+        }
+        /* inactive source = outline */
+        .stButton>button[kind="secondary"] {
+            background:#fff; color:var(--text); border:1px solid var(--border-2);
+        }
+        .stButton>button[kind="secondary"]:hover,
+        .stButton>button[kind="secondary"]:focus {
+            background:var(--panel-2); color:var(--text); border-color:var(--border-2); box-shadow:none;
+        }
 
         .stDownloadButton>button {
             background:#ffffff; color:var(--text); font-weight:500;
@@ -382,6 +395,41 @@ def _render_overlay(img_cleaned, pupil_xy, pupil_radius, iris_contour, iris_cent
     return buf.read()
 
 
+def _pipeline_error_reason(output, pipeline) -> str:
+    """Extract the real reason open-iris rejected an image.
+
+    When a validation/geometry node fails, open-iris does not raise — it records
+    the cause in the pipeline output's ``error`` field (and the call trace) and
+    leaves downstream nodes as ``None``. We surface that instead of a generic
+    "Geometry estimation failed" message.
+    """
+    # 1) the serialized output's error dict
+    try:
+        err = output.get("error") if isinstance(output, dict) else None
+    except Exception:
+        err = None
+    if isinstance(err, dict):
+        etype = err.get("error_type") or err.get("type") or ""
+        msg = err.get("message") or ""
+        text = f"{etype}: {msg}".strip(": ").strip()
+        if text:
+            return text
+    elif err:
+        return str(err)
+
+    # 2) the call-trace error object
+    try:
+        getter = getattr(pipeline.call_trace, "get_error", None)
+        tb_err = getter() if getter else None
+        if tb_err is not None:
+            return f"{type(tb_err).__name__}: {tb_err}"
+    except Exception:
+        pass
+
+    return ("The image may not be a clear near-infrared iris, the eye side may be "
+            "wrong, or the eye is too off-center / low-resolution.")
+
+
 def analyze_iris_image(img_pixels, eye_side: str = "right") -> dict:
     """Reflection removal + IRIS pipeline + geometry. Mirrors the API version."""
     try:
@@ -432,7 +480,8 @@ def analyze_iris_image(img_pixels, eye_side: str = "right") -> dict:
         try:
             geometry = iris_pipeline.call_trace["geometry_estimation"]
             if geometry is None:
-                return {"error": "Geometry estimation failed."}
+                reason = _pipeline_error_reason(output, iris_pipeline)
+                return {"error": f"Could not locate the iris/pupil in this image. {reason}"}
         except Exception as e:
             return {"error": f"Failed to access geometry estimation: {e}"}
 
@@ -621,23 +670,28 @@ def render_result(r: IrisResult, eye_side: str) -> None:
 #  App layout — eye-side dropdown + two input buttons, then results
 # ============================================================================
 st.session_state.setdefault("input_mode", "upload")
+mode = st.session_state["input_mode"]
 
 set_col, up_col, cam_col = st.columns([1.4, 1, 1])
 with set_col:
     eye_side = st.selectbox("Eye side", ["right", "left"], index=0)
 with up_col:
     st.markdown("<div style='height:1.75rem'></div>", unsafe_allow_html=True)
-    if st.button("Upload image", use_container_width=True):
+    if st.button("Upload image", use_container_width=True,
+                 type="primary" if mode == "upload" else "secondary"):
         st.session_state["input_mode"] = "upload"
+        st.rerun()
 with cam_col:
     st.markdown("<div style='height:1.75rem'></div>", unsafe_allow_html=True)
-    if st.button("Take an image", use_container_width=True):
+    if st.button("Take an image", use_container_width=True,
+                 type="primary" if mode == "camera" else "secondary"):
         st.session_state["input_mode"] = "camera"
+        st.rerun()
 
 image_bytes: Optional[bytes] = None
 image_name = "captured.png"
 
-if st.session_state["input_mode"] == "upload":
+if mode == "upload":
     up = st.file_uploader(
         "Upload an IR iris image",
         type=["png", "jpg", "jpeg", "bmp", "tif", "tiff"],
@@ -651,6 +705,9 @@ else:
     shot = st.camera_input("Take a photo", label_visibility="collapsed")
     if shot is not None:
         image_bytes = shot.getvalue()
+    else:
+        st.caption("If the camera doesn't appear, allow camera access for this "
+                   "site in your browser, then reload.")
 
 if not _ENGINE_READY:
     st.caption("Analysis engine is not available in this environment.")
