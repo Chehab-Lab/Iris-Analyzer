@@ -140,6 +140,7 @@ def _collect_image() -> tuple[Optional[bytes], str, str]:
     works after the reload instead of disappearing.
     """
     st.session_state.setdefault("uploader_key", 0)
+    st.session_state.setdefault("camera_key", 0)
     cam_on = st.query_params.get("cam") == "1"
 
     set_col, up_col, cam_col = st.columns([1.4, 1, 1])
@@ -161,9 +162,11 @@ def _collect_image() -> tuple[Optional[bytes], str, str]:
             if cam_on:
                 del st.query_params["cam"]
             else:
-                # opening the camera clears any previously uploaded image / result
+                # open a fresh camera: drop any previous photo / uploaded image
                 st.query_params["cam"] = "1"
+                st.session_state["camera_key"] += 1
                 st.session_state["uploader_key"] += 1
+                st.session_state.pop("captured_image", None)
             st.rerun()
 
     image_bytes: Optional[bytes] = None
@@ -172,21 +175,29 @@ def _collect_image() -> tuple[Optional[bytes], str, str]:
     if up is not None:
         image_bytes = up.getvalue()
         image_name = up.name
-        # uploading an image closes the live camera stream
+        # uploading an image drops any captured photo and closes the camera
+        st.session_state.pop("captured_image", None)
         if cam_on:
             del st.query_params["cam"]
             st.rerun()
 
     if cam_on:
-        shot = hires_camera(key="camera")
+        shot = hires_camera(key=f"camera_{st.session_state['camera_key']}")
         st.caption("The iris detection engine expects in-distribution, high-resolution "
                    "close-up images of an eye. Use the web-camera results with caution.")
         if shot is not None:
-            image_bytes = shot
-            image_name = "captured.jpg"
+            # photo taken: keep it, stop the live stream, then show the analysis
+            st.session_state["captured_image"] = shot
+            del st.query_params["cam"]
+            st.rerun()
         else:
             st.caption("After clicking **Allow** for camera access, reload the page — "
                        "the camera will stay open and start working.")
+
+    # show the last captured photo's result while the camera is closed
+    if image_bytes is None and st.session_state.get("captured_image"):
+        image_bytes = st.session_state["captured_image"]
+        image_name = "captured.jpg"
 
     return image_bytes, image_name, eye_side
 
