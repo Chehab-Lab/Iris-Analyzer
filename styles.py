@@ -106,6 +106,13 @@ def inject_css() -> None:
             font-size:.92rem; line-height:1.5;
             transition: background .12s ease, border-color .12s ease;
         }
+        /* Streamlit nests the label in a <p>/<div> with its own weight — force it
+           to match the Upload-image button label exactly. */
+        .stButton>button p,
+        .stButton>button div {
+            font-weight:500 !important; font-size:.92rem !important; line-height:1.5 !important;
+            margin:0;
+        }
         /* active source = solid blue */
         .stButton>button[kind="primary"] {
             background: var(--accent); color:#fff; border:1px solid var(--accent);
