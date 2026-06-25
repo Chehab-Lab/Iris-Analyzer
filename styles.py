@@ -65,6 +65,13 @@ def inject_css() -> None:
             font-size: 1.12rem; font-weight: 600; letter-spacing: -.2px;
             color: var(--text);
         }
+        .iris-nav .nav-links {margin-left:auto; display:flex; gap:22px;}
+        .iris-nav .nav-links a {
+            color: var(--text-dim); text-decoration:none; font-size:.92rem;
+            font-weight:500; padding:4px 2px; border-bottom:2px solid transparent;
+        }
+        .iris-nav .nav-links a:hover {color: var(--text);}
+        .iris-nav .nav-links a.active {color: var(--accent); border-bottom-color: var(--accent);}
 
         /* ---- Cards ---- */
         .iris-card {
@@ -149,6 +156,21 @@ def inject_css() -> None:
 
         /* images */
         [data-testid="stImage"] img {border:1px solid var(--border); border-radius:10px;}
+
+        /* ---- About page ---- */
+        .iris-card p {color:var(--text); font-size:.92rem; line-height:1.55; margin:0 0 10px;}
+        .iris-card p:last-child {margin-bottom:0;}
+        .iris-card a {color:var(--accent); text-decoration:none;}
+        .iris-card a:hover {text-decoration:underline;}
+        .about-output {display:flex; gap:22px; align-items:flex-start; flex-wrap:wrap;}
+        .about-output .shot {flex:0 0 200px;}
+        .about-output .shot img {
+            width:200px; height:auto; border:1px solid var(--border); border-radius:10px;
+        }
+        .about-output .legend {flex:1; min-width:240px;}
+        .about-output .legend ul {list-style:none; padding:0; margin:0 0 10px;}
+        .about-output .legend li {font-size:.92rem; margin:6px 0; color:var(--text);}
+        .about-output .legend .key {font-size:1rem; margin-right:7px;}
 
         /* ---- Footer ---- */
         .iris-footer {

@@ -23,24 +23,34 @@ from analysis import IrisResult
 CHEHAB_LAB_URL = "https://chehablab.com"
 
 
-@lru_cache(maxsize=1)
-def _logo_data_uri() -> str:
-    """Return the Chehab Lab logo as an inline base64 data URI (cached)."""
+@lru_cache(maxsize=2)
+def _asset_data_uri(filename: str) -> str:
+    """Return an asset image as an inline base64 data URI (cached)."""
     try:
-        logo = Path(__file__).parent / "assets" / "chehab-lab-logo.png"
-        b64 = base64.b64encode(logo.read_bytes()).decode("ascii")
+        path = Path(__file__).parent / "assets" / filename
+        b64 = base64.b64encode(path.read_bytes()).decode("ascii")
         return f"data:image/png;base64,{b64}"
     except Exception:
         return ""
 
 
-def render_navbar() -> None:
-    """Fixed top bar with the app title."""
+def _logo_data_uri() -> str:
+    return _asset_data_uri("chehab-lab-logo.png")
+
+
+def render_navbar(page: str) -> None:
+    """Fixed top bar with the app title and page links."""
+    home_cls = "active" if page != "about" else ""
+    about_cls = "active" if page == "about" else ""
     st.markdown(
-        """
+        f"""
         <div class="iris-nav">
             <span class="glyph">\U0001F441</span>
             <span class="name">Iris Analyzer</span>
+            <div class="nav-links">
+                <a class="{home_cls}" href="?" target="_self">Analyzer</a>
+                <a class="{about_cls}" href="?page=about" target="_self">About</a>
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -172,10 +182,8 @@ def render_footer() -> None:
     )
 
 
-def run() -> None:
-    """Render the whole app: nav bar, controls, result, then the footer."""
-    render_navbar()
-
+def render_analyzer() -> None:
+    """The main tool: input controls and the analysis result."""
     image_bytes, image_name, eye_side = _collect_image()
 
     if not analysis.ENGINE_READY:
@@ -185,5 +193,84 @@ def run() -> None:
         with st.spinner("Analyzing…"):
             result = analysis.analyze_one(image_bytes, image_name, eye_side)
         render_result(result, eye_side)
+
+
+def render_about() -> None:
+    """Static About page: what the app does, the output, authors and license."""
+    st.markdown(
+        """
+        <div class="iris-card">
+            <h3>What is Iris Analyzer?</h3>
+            <p>Iris Analyzer is a tool for measuring the geometry of the human eye
+            from near-infrared (IR) iris images. For a single uploaded or
+            camera-captured image it removes specular reflections inside the pupil,
+            runs the <b>open-iris</b> recognition pipeline to segment the eye,
+            estimates the pupil and iris circles, and reports the
+            <b>Iris-to-Pupil Ratio (IPR)</b> — a normalized measure of pupil
+            dilation that is independent of image scale.</p>
+            <p>Pick the eye side, provide an image, and the app returns an annotated
+            overlay together with the numeric measurements, both downloadable.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    output = _asset_data_uri("output.png")
+    output_img = (f'<img src="{output}" alt="Example output overlay" />'
+                  if output else "")
+    st.markdown(
+        f"""
+        <div class="iris-card">
+            <h3>Understanding the output</h3>
+            <div class="about-output">
+                <div class="shot">{output_img}</div>
+                <div class="legend">
+                    <p>Every analyzed image produces an annotated overlay marking the
+                    detected geometry:</p>
+                    <ul>
+                        <li><span class="key" style="color:#16a34a">●</span>
+                            <b>Pupil circle</b> — the fitted pupil boundary</li>
+                        <li><span class="key" style="color:#2563eb">●</span>
+                            <b>Iris boundary</b> — the outer iris limbus</li>
+                        <li><span class="key" style="color:#7c3aed">●</span>
+                            <b>Iris center</b></li>
+                        <li><span class="key" style="color:#dc2626">●</span>
+                            <b>Pupil center</b></li>
+                    </ul>
+                    <p>From these the app computes the <b>IPR = iris radius / pupil
+                    radius</b>, plus the pupil and iris radii and centers (in pixels),
+                    which you can export as a CSV.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="iris-card">
+            <h3>Authors</h3>
+            <p>Noha Faour &nbsp;·&nbsp; Ahmad Mustapha &nbsp;·&nbsp; Ali Chehab</p>
+        </div>
+
+        <div class="iris-card">
+            <h3>License</h3>
+            <p>© 2026 Chehab Lab. All rights reserved.</p>
+            <p>This work is licensed under
+            <a href="https://creativecommons.org/licenses/by-nc/4.0/"
+               target="_blank" rel="noopener noreferrer">Creative Commons
+            Attribution–NonCommercial 4.0 (CC BY-NC 4.0)</a> — you may use and share
+            it with attribution, for non-commercial purposes only.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def run() -> None:
+    """Route between the Analyzer and About pages; always show the footer."""
+    page = st.query_params.get("page", "analyzer")
+    render_navbar(page)
+
+    if page == "about":
+        render_about()
+    else:
+        render_analyzer()
 
     render_footer()
