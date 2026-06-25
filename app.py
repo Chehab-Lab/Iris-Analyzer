@@ -39,12 +39,16 @@ try:
 except Exception:  # pragma: no cover
     _CV2_OK = False
 
+_IRIS_ERR = ""
 try:
     import iris
 
     _IRIS_OK = True
-except Exception:  # pragma: no cover
+except Exception as _e:  # pragma: no cover
     _IRIS_OK = False
+    import traceback as _tb
+
+    _IRIS_ERR = "".join(_tb.format_exception_only(type(_e), _e)).strip()
 
 
 # ============================================================================
@@ -437,6 +441,9 @@ with st.sidebar:
     )
     if not (_IRIS_OK and _CV2_OK):
         st.caption("Install dependencies: `pip install -r requirements.txt`")
+    if _IRIS_ERR:
+        with st.expander("Why is `iris` unavailable?", expanded=True):
+            st.code(_IRIS_ERR, language="text")
     st.divider()
     st.caption("Iris Analyzer · scientific batch tool")
 
