@@ -265,7 +265,12 @@ def render_about() -> None:
                 </div>
             </div>
         </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
+    st.markdown(
+        """
         <div class="iris-card">
             <h3>API</h3>
             <p>The same engine is available as a JSON HTTP API served by the app
@@ -276,26 +281,39 @@ def render_about() -> None:
             <code>left</code>), and optional <code>include_overlay</code>
             (<code>true</code>/<code>false</code>). <b>GET</b> <code>/api/health</code>
             reports whether the engine is ready.</p>
-            <pre class="api-code">curl -X POST https://&lt;this-app-url&gt;/api/analyze \\
-  -F image=@eye.png \\
-  -F eye_side=right</pre>
-            <p>The response carries the IPR with the pupil/iris radii and centers (and
-            the annotated overlay as base64 when requested):</p>
-            <pre class="api-code">{{
-  "status": "ok",
-  "ipr": 2.83,
-  "pupil_radius": 41.2,
-  "iris_radius": 116.5,
-  "pupil_center": [312.0, 248.7],
-  "iris_center": [313.4, 249.1]
-}}</pre>
         </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.code(
+        "curl -X POST https://<this-app-url>/api/analyze \\\n"
+        "  -F image=@eye.png \\\n"
+        "  -F eye_side=right",
+        language="bash",
+    )
+    st.code(
+        '{\n'
+        '  "status": "ok",\n'
+        '  "ipr": 2.83,\n'
+        '  "pupil_radius": 41.2,\n'
+        '  "iris_radius": 116.5,\n'
+        '  "pupil_center": [312.0, 248.7],\n'
+        '  "iris_center": [313.4, 249.1]\n'
+        '}',
+        language="json",
+    )
 
+    st.markdown(
+        """
         <div class="iris-card">
             <h3>Authors</h3>
             <p>Noha Faour &nbsp;·&nbsp; Ahmad Mustapha &nbsp;·&nbsp; Ali Chehab</p>
         </div>
-
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        """
         <div class="iris-card">
             <h3>License</h3>
             <p>© 2026 Chehab Lab. All rights reserved.</p>
