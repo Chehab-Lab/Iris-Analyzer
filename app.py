@@ -337,8 +337,13 @@ def inject_css() -> None:
         [data-testid="stFileUploaderDropzone"]::after {
             content:"Upload image"; color:#fff; font-weight:500; font-size:.9rem;
         }
-        /* hide the uploaded-file chip list under the button */
-        [data-testid="stFileUploaderFile"] {display:none;}
+        /* hide everything except the button: file name, size, delete, list */
+        [data-testid="stFileUploaderFile"],
+        [data-testid="stFileUploaderFileName"],
+        [data-testid="stFileUploaderFileData"],
+        [data-testid="stFileUploaderDeleteBtn"],
+        [data-testid="stFileUploader"] ul,
+        [data-testid="stFileUploader"] small {display:none !important;}
 
         /* dataframe */
         [data-testid="stDataFrame"] {border:1px solid var(--border); border-radius:10px;}
@@ -683,6 +688,7 @@ def render_result(r: IrisResult, eye_side: str) -> None:
 #  App layout — eye-side dropdown + two input buttons, then results
 # ============================================================================
 st.session_state.setdefault("show_camera", False)
+st.session_state.setdefault("uploader_key", 0)
 
 set_col, up_col, cam_col = st.columns([1.4, 1, 1])
 with set_col:
@@ -694,11 +700,15 @@ with up_col:
         type=["png", "jpg", "jpeg", "bmp", "tif", "tiff"],
         accept_multiple_files=False,
         label_visibility="collapsed",
+        key=f"uploader_{st.session_state['uploader_key']}",
     )
 with cam_col:
     st.markdown("<div style='height:1.75rem'></div>", unsafe_allow_html=True)
     if st.button("Take an image", use_container_width=True, type="primary"):
+        # switching to camera clears any previously uploaded image / result
         st.session_state["show_camera"] = True
+        st.session_state["uploader_key"] += 1
+        st.rerun()
 
 image_bytes: Optional[bytes] = None
 image_name = "captured.png"
