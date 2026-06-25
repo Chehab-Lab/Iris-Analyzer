@@ -164,11 +164,43 @@ def _clear_execstack_flag() -> None:
         _EXECSTACK_LOG.append(f"shadow-fail: {e.__class__.__name__}: {e}")
 
 
+def _redirect_iris_model_cache() -> None:
+    """Point open-iris's segmentation-model cache at a writable directory.
+
+    open-iris caches its HuggingFace segmentation ONNX in
+    ``MODEL_CACHE_DIR = <iris pkg>/nodes/segmentation/assets``. On Streamlit
+    Cloud that site-packages tree is read-only, so ``hf_hub_download`` raises
+    ``PermissionError`` ("...segmentation/assets"). We copy whatever is already
+    bundled there into a writable temp dir (so no re-download is needed when the
+    model ships with the wheel) and repoint the class attribute at it.
+    """
+    try:
+        from iris.nodes.segmentation import (
+            multilabel_segmentation_interface as _msi,
+        )
+
+        cls = _msi.MultilabelSemanticSegmentationInterface
+        src = getattr(cls, "MODEL_CACHE_DIR", None)
+        dst = os.path.join(tempfile.gettempdir(), "iris_model_cache")
+        if not os.path.isdir(dst):
+            try:
+                if src and os.path.isdir(src):
+                    shutil.copytree(src, dst)
+                else:
+                    os.makedirs(dst, exist_ok=True)
+            except Exception:
+                os.makedirs(dst, exist_ok=True)
+        cls.MODEL_CACHE_DIR = dst
+    except Exception:
+        pass
+
+
 _IRIS_ERR = ""
 try:
     _clear_execstack_flag()
     import iris
 
+    _redirect_iris_model_cache()
     _IRIS_OK = True
 except Exception as _e:  # pragma: no cover
     _IRIS_OK = False
