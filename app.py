@@ -618,23 +618,20 @@ def render_result(r: IrisResult, eye_side: str) -> None:
 
 
 # ============================================================================
-#  App layout — one setting + two input buttons
+#  App layout — eye-side dropdown + two input buttons, then results
 # ============================================================================
 st.session_state.setdefault("input_mode", "upload")
 
-st.markdown('<div class="iris-card"><h3>Analyze an iris image</h3>',
-            unsafe_allow_html=True)
-
 set_col, up_col, cam_col = st.columns([1.4, 1, 1])
 with set_col:
-    eye_side = st.radio("Eye side", ["right", "left"], horizontal=True)
+    eye_side = st.selectbox("Eye side", ["right", "left"], index=0)
 with up_col:
-    st.markdown("<div style='height:1.7rem'></div>", unsafe_allow_html=True)
-    if st.button("📁  Upload image", use_container_width=True):
+    st.markdown("<div style='height:1.75rem'></div>", unsafe_allow_html=True)
+    if st.button("Upload image", use_container_width=True):
         st.session_state["input_mode"] = "upload"
 with cam_col:
-    st.markdown("<div style='height:1.7rem'></div>", unsafe_allow_html=True)
-    if st.button("📷  Take image", use_container_width=True):
+    st.markdown("<div style='height:1.75rem'></div>", unsafe_allow_html=True)
+    if st.button("Take an image", use_container_width=True):
         st.session_state["input_mode"] = "camera"
 
 image_bytes: Optional[bytes] = None
@@ -657,16 +654,8 @@ else:
 
 if not _ENGINE_READY:
     st.caption("Analysis engine is not available in this environment.")
-st.markdown("</div>", unsafe_allow_html=True)
 
 if image_bytes and _ENGINE_READY:
     with st.spinner("Analyzing…"):
         result = analyze_one(image_bytes, image_name, eye_side)
     render_result(result, eye_side)
-elif not image_bytes:
-    st.markdown(
-        "<div class='iris-card' style='text-align:center;color:var(--text-dim);'>"
-        "Choose <b>Upload image</b> or <b>Take image</b>, pick the eye side, and the "
-        "analysis appears here.</div>",
-        unsafe_allow_html=True,
-    )
