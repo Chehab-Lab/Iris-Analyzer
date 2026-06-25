@@ -80,19 +80,42 @@ def _clamp(value: float, lo: float, hi: float) -> float:
     return float(min(max(value, lo), hi))
 
 
+def _bump(key: str, delta: float, lo: float, hi: float) -> None:
+    """on_click callback — runs before the rerun, so the new value is rendered."""
+    st.session_state[key] = _clamp(st.session_state.get(key, lo) + delta, lo, hi)
+
+
 def _nudge(label: str, key: str, lo: float, hi: float, step: float = 1.0) -> None:
     """A label with −/+ buttons that nudge a session_state value within [lo, hi]."""
     c0, c1, c2, c3 = st.columns([3, 1, 1.4, 1])
     c0.markdown(f"<div class='nudge-label'>{label}</div>", unsafe_allow_html=True)
-    dec = c1.button("−", key=f"{key}_dec", use_container_width=True)
-    val = c2.empty()
-    inc = c3.button("+", key=f"{key}_inc", use_container_width=True)
-    if dec:
-        st.session_state[key] = _clamp(st.session_state[key] - step, lo, hi)
-    if inc:
-        st.session_state[key] = _clamp(st.session_state[key] + step, lo, hi)
-    val.markdown(f"<div class='nudge-val'>{st.session_state[key]:.0f}</div>",
-                 unsafe_allow_html=True)
+    c1.button("−", key=f"{key}_dec", use_container_width=True,
+              on_click=_bump, args=(key, -step, lo, hi))
+    c2.markdown(f"<div class='nudge-val'>{st.session_state[key]:.0f}</div>",
+                unsafe_allow_html=True)
+    c3.button("+", key=f"{key}_inc", use_container_width=True,
+              on_click=_bump, args=(key, step, lo, hi))
+
+
+def _overlay_svg(b64: str, w: int, h: int, pupil, pr, iris, ir) -> str:
+    """Inline SVG: the base image (drawn once) plus the adjustable circles on top.
+    Nudging only changes the circle coordinates — the base image never reloads."""
+    sw = max(1.5, max(w, h) / 250.0)
+    dot = max(2.0, max(w, h) / 90.0)
+    return (
+        f'<div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;line-height:0">'
+        f'<svg viewBox="0 0 {w} {h}" width="100%" xmlns="http://www.w3.org/2000/svg" '
+        f'style="display:block;height:auto">'
+        f'<image href="data:image/png;base64,{b64}" x="0" y="0" width="{w}" height="{h}" '
+        f'preserveAspectRatio="none"/>'
+        f'<circle cx="{pupil[0]:.1f}" cy="{pupil[1]:.1f}" r="{pr:.1f}" fill="none" '
+        f'stroke="#16a34a" stroke-width="{sw:.2f}"/>'
+        f'<circle cx="{iris[0]:.1f}" cy="{iris[1]:.1f}" r="{ir:.1f}" fill="none" '
+        f'stroke="#2563eb" stroke-width="{sw:.2f}"/>'
+        f'<circle cx="{iris[0]:.1f}" cy="{iris[1]:.1f}" r="{dot:.1f}" fill="#7c3aed"/>'
+        f'<circle cx="{pupil[0]:.1f}" cy="{pupil[1]:.1f}" r="{dot:.1f}" fill="#dc2626"/>'
+        f'</svg></div>'
+    )
 
 
 def render_result(r: IrisResult, eye_side: str) -> None:
@@ -122,12 +145,18 @@ def render_result(r: IrisResult, eye_side: str) -> None:
         st.session_state["adj_icy"] = _clamp(r.iris_center[1], 0.0, h)
         st.session_state["adj_ir"] = _clamp(r.iris_radius, 1.0, rmax)
 
-    img_col, data_col = st.columns([3, 2], gap="large")
-    img_ph = img_col.empty()
-    metrics_ph = data_col.empty()
+    # nudge callbacks have already run, so these are the current values
+    pcx, pcy, pr = st.session_state["adj_pcx"], st.session_state["adj_pcy"], st.session_state["adj_pr"]
+    icx, icy, ir = st.session_state["adj_icx"], st.session_state["adj_icy"], st.session_state["adj_ir"]
+    ipr = ir / pr if pr > 0 else 0.0
 
-    # Nudge controls, directly under the image.
+    # base image encoded once; only the circle coords change between nudges
+    b64 = base64.b64encode(r.original_png).decode("ascii")
+
+    img_col, data_col = st.columns([3, 2], gap="large")
     with img_col:
+        st.markdown(_overlay_svg(b64, w, h, (pcx, pcy), pr, (icx, icy), ir),
+                    unsafe_allow_html=True)
         st.caption("Nudge the centers and radii (± 1 px) to refine the boundaries.")
         pcol, icol = st.columns(2)
         with pcol:
@@ -140,33 +169,28 @@ def render_result(r: IrisResult, eye_side: str) -> None:
             _nudge("Center X", "adj_icx", 0.0, float(w))
             _nudge("Center Y", "adj_icy", 0.0, float(h))
             _nudge("Radius", "adj_ir", 1.0, rmax)
+    with data_col:
+        st.markdown(
+            f"""
+            <div class="metric-grid">
+                <div class="metric hl"><div class="label">IPR</div>
+                    <div class="value">{ipr:.4f}</div></div>
+                <div class="metric"><div class="label">Eye side</div>
+                    <div class="value" style="font-size:1.1rem">{eye_side.title()}</div></div>
+                <div class="metric"><div class="label">Iris radius</div>
+                    <div class="value">{ir:.1f}<span class="unit"> px</span></div></div>
+                <div class="metric"><div class="label">Pupil radius</div>
+                    <div class="value">{pr:.1f}<span class="unit"> px</span></div></div>
+                <div class="metric"><div class="label">Iris center</div>
+                    <div class="value" style="font-size:1rem">{icx:.0f}, {icy:.0f}</div></div>
+                <div class="metric"><div class="label">Pupil center</div>
+                    <div class="value" style="font-size:1rem">{pcx:.0f}, {pcy:.0f}</div></div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-    pcx, pcy, pr = st.session_state["adj_pcx"], st.session_state["adj_pcy"], st.session_state["adj_pr"]
-    icx, icy, ir = st.session_state["adj_icx"], st.session_state["adj_icy"], st.session_state["adj_ir"]
-    overlay = analysis.render_circle_overlay(r.original_png, (pcx, pcy), pr, (icx, icy), ir)
-    ipr = ir / pr if pr > 0 else 0.0
-
-    img_ph.image(overlay, use_container_width=True, caption="Pupil & iris boundaries")
-    metrics_ph.markdown(
-        f"""
-        <div class="metric-grid">
-            <div class="metric hl"><div class="label">IPR</div>
-                <div class="value">{ipr:.4f}</div></div>
-            <div class="metric"><div class="label">Eye side</div>
-                <div class="value" style="font-size:1.1rem">{eye_side.title()}</div></div>
-            <div class="metric"><div class="label">Iris radius</div>
-                <div class="value">{ir:.1f}<span class="unit"> px</span></div></div>
-            <div class="metric"><div class="label">Pupil radius</div>
-                <div class="value">{pr:.1f}<span class="unit"> px</span></div></div>
-            <div class="metric"><div class="label">Iris center</div>
-                <div class="value" style="font-size:1rem">{icx:.0f}, {icy:.0f}</div></div>
-            <div class="metric"><div class="label">Pupil center</div>
-                <div class="value" style="font-size:1rem">{pcx:.0f}, {pcy:.0f}</div></div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
+    overlay = analysis.draw_circles_png(r.original_png, (pcx, pcy), pr, (icx, icy), ir)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     csv = (
         "image,eye_side,ipr,pupil_x,pupil_y,pupil_radius,"

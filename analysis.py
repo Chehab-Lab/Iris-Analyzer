@@ -266,38 +266,32 @@ def _render_overlay(img_cleaned, pupil_xy, pupil_radius, iris_contour, iris_cent
     return buf.read()
 
 
-def render_circle_overlay(base_png_bytes, pupil_xy, pupil_radius,
-                          iris_xy, iris_radius) -> bytes:
-    """Draw user-adjusted pupil & iris circles on the source image. PNG bytes.
+def draw_circles_png(base_png_bytes, pupil_xy, pupil_radius,
+                     iris_xy, iris_radius) -> bytes:
+    """Draw user-adjusted pupil & iris circles on the source image with OpenCV.
 
-    Unlike the detected overlay (which traces the real iris contour), this draws
-    both boundaries as circles so they can be moved/resized from the UI.
+    Fast (no matplotlib) and keeps the image dimensions constant. Used to produce
+    the downloadable PNG; the live preview is an inline SVG built in the UI.
     """
     img = cv2.imdecode(np.frombuffer(base_png_bytes, np.uint8), cv2.IMREAD_GRAYSCALE)
-    fig = plt.figure(figsize=(8, 8), facecolor="#ffffff")
-    ax = plt.gca()
-    if img is not None:
-        ax.imshow(img, cmap="gray")
+    if img is None:
+        return base_png_bytes
+    canvas = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+    h, w = canvas.shape[:2]
+    thick = max(1, round(max(w, h) / 300))
+    dot = max(2, round(max(w, h) / 110))
 
-    ax.add_patch(plt.Circle(pupil_xy, pupil_radius, fill=False,
-                            color="#16a34a", linewidth=2, label="Pupil circle"))
-    ax.add_patch(plt.Circle(iris_xy, iris_radius, fill=False,
-                            color="#2563eb", linewidth=2, label="Iris circle"))
-    ax.plot(iris_xy[0], iris_xy[1], "o", color="#7c3aed", markersize=6, label="Iris center")
-    ax.plot(pupil_xy[0], pupil_xy[1], "o", color="#dc2626", markersize=6, label="Pupil center")
+    def p(xy):
+        return (int(round(xy[0])), int(round(xy[1])))
 
-    ax.set_title("Pupil & iris boundaries", color="#1f2937")
-    leg = ax.legend(facecolor="#ffffff", edgecolor="#e5e7eb", labelcolor="#1f2937")
-    for txt in leg.get_texts():
-        txt.set_color("#1f2937")
-    ax.axis("off")
+    # colours below are BGR
+    cv2.circle(canvas, p(pupil_xy), int(round(pupil_radius)), (74, 163, 22), thick)  # green
+    cv2.circle(canvas, p(iris_xy), int(round(iris_radius)), (235, 99, 37), thick)     # blue
+    cv2.circle(canvas, p(iris_xy), dot, (237, 58, 124), -1)                           # purple
+    cv2.circle(canvas, p(pupil_xy), dot, (38, 38, 220), -1)                           # red
 
-    buf = io.BytesIO()
-    # Lower dpi keeps each nudge redraw snappy (this overlay is re-rendered live).
-    fig.savefig(buf, format="png", bbox_inches="tight", dpi=110, facecolor="#ffffff")
-    plt.close(fig)
-    buf.seek(0)
-    return buf.read()
+    ok, enc = cv2.imencode(".png", canvas)
+    return enc.tobytes() if ok else base_png_bytes
 
 
 def _pipeline_error_reason(output, pipeline) -> str:
