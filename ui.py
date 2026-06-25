@@ -188,7 +188,7 @@ def _collect_image() -> tuple[Optional[bytes], str, str]:
             st.caption("After clicking **Allow** for camera access, reload the page — "
                        "the camera will stay open and start working.")
 
-    return image_bytes, image_name, eye_side, from_camera
+    return image_bytes, image_name, eye_side
 
 
 def render_footer() -> None:
