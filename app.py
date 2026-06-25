@@ -14,9 +14,13 @@ Run with:  streamlit run app.py
 from __future__ import annotations
 
 import io
+import os
+import struct
+import sysconfig
 import zipfile
 from dataclasses import dataclass, field
 from datetime import datetime
+from glob import glob
 from typing import Optional
 
 import matplotlib
@@ -39,8 +43,58 @@ try:
 except Exception:  # pragma: no cover
     _CV2_OK = False
 
+def _clear_execstack_flag() -> None:
+    """Clear the executable-stack bit on the onnxruntime native extension.
+
+    The ``onnxruntime==1.16.3`` wheels (hard-pinned by ``open-iris``) ship the
+    pybind extension with ``PT_GNU_STACK`` marked executable. Hardened kernels
+    (e.g. Streamlit Cloud) refuse to ``dlopen`` such a library:
+
+        ImportError: ... cannot enable executable stack as shared object
+        requires: Invalid argument
+
+    This patches the ELF in place — the pure-Python equivalent of
+    ``execstack -c`` — *before* the library is loaded. It is idempotent and
+    silently no-ops on any platform where it does not apply (e.g. Windows).
+    """
+    PT_GNU_STACK = 0x6474E551
+    PF_X = 0x1
+
+    roots = {sysconfig.get_paths().get("purelib", "")}
+    roots.add(os.path.join(os.path.dirname(np.__file__), os.pardir))
+    targets: list[str] = []
+    for root in filter(None, roots):
+        targets += glob(os.path.join(root, "onnxruntime", "capi", "*.so"))
+
+    for so in targets:
+        try:
+            with open(so, "rb+") as f:
+                data = bytearray(f.read())
+                if data[:4] != b"\x7fELF" or data[4] != 2:  # ELF64 only
+                    continue
+                e_phoff = struct.unpack_from("<Q", data, 0x20)[0]
+                e_phentsize = struct.unpack_from("<H", data, 0x36)[0]
+                e_phnum = struct.unpack_from("<H", data, 0x38)[0]
+                changed = False
+                for i in range(e_phnum):
+                    off = e_phoff + i * e_phentsize
+                    if struct.unpack_from("<I", data, off)[0] != PT_GNU_STACK:
+                        continue
+                    p_flags = struct.unpack_from("<I", data, off + 4)[0]
+                    if p_flags & PF_X:
+                        struct.pack_into("<I", data, off + 4, p_flags & ~PF_X)
+                        changed = True
+                if changed:
+                    f.seek(0)
+                    f.write(data)
+                    f.flush()
+        except Exception:
+            pass  # best-effort; the import below will report if it still fails
+
+
 _IRIS_ERR = ""
 try:
+    _clear_execstack_flag()
     import iris
 
     _IRIS_OK = True
