@@ -102,15 +102,20 @@ def inject_css() -> None:
 
         /* ---- Buttons (flat, desktop-style) ---- */
         .stButton>button {
-            font-weight:500; border-radius:8px; padding:.55rem 1rem;
-            font-size:.92rem; line-height:1.5;
+            border-radius:8px; padding:.55rem 1rem;
             transition: background .12s ease, border-color .12s ease;
         }
-        /* Streamlit nests the label in a <p>/<div>/<span> with its own weight —
-           force every part to match the Upload-image button label exactly. */
+        /* Streamlit nests the label in a <p>/<div>/<span> with its own size/weight.
+           Pin every part (and the dropzone label below) to identical pixel metrics
+           so "Upload image" and "Take an image" read the same. */
         .stButton>button,
-        .stButton>button * {
-            font-weight:500 !important; font-size:.92rem !important; line-height:1.5 !important;
+        .stButton>button *,
+        [data-testid="stBaseButton-primary"],
+        [data-testid="stBaseButton-primary"] *,
+        [data-testid="stBaseButton-secondary"],
+        [data-testid="stBaseButton-secondary"] * {
+            font-size:14px !important; font-weight:500 !important; line-height:1.5 !important;
+            font-family:inherit !important;
         }
         .stButton>button p {margin:0;}
         /* active source = solid blue */
@@ -154,8 +159,9 @@ def inject_css() -> None:
            leaving only our label below */
         [data-testid="stFileUploaderDropzone"] * {display:none !important;}
         [data-testid="stFileUploaderDropzone"]::after {
-            content:"Upload image"; color:#fff; font-weight:500 !important;
-            font-size:.92rem !important; line-height:1.5 !important;
+            content:"Upload image"; color:#fff;
+            font-size:14px !important; font-weight:500 !important; line-height:1.5 !important;
+            font-family:inherit !important;
             width:100%; text-align:center;
         }
         /* hide any file list rendered as a sibling of the dropzone */
