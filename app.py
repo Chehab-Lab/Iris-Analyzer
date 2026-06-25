@@ -322,10 +322,23 @@ def inject_css() -> None:
         /* segmented radio (the one setting) */
         div[role="radiogroup"] {gap:8px;}
 
-        /* uploader / camera */
+        /* file uploader rendered as a single solid button (no dropzone box) */
+        [data-testid="stFileUploader"] > label {display:none;}
         [data-testid="stFileUploaderDropzone"] {
-            background: var(--panel-2); border:1.5px dashed var(--border-2); border-radius:10px;
+            display:flex; align-items:center; justify-content:center;
+            min-height:0; padding:.55rem 1rem; cursor:pointer;
+            background:var(--accent); border:1px solid var(--accent); border-radius:8px;
         }
+        [data-testid="stFileUploaderDropzone"]:hover {
+            background:var(--accent-h); border-color:var(--accent-h);
+        }
+        [data-testid="stFileUploaderDropzone"] > span,
+        [data-testid="stFileUploaderDropzoneInstructions"] {display:none;}
+        [data-testid="stFileUploaderDropzone"]::after {
+            content:"Upload image"; color:#fff; font-weight:500; font-size:.9rem;
+        }
+        /* hide the uploaded-file chip list under the button */
+        [data-testid="stFileUploaderFile"] {display:none;}
 
         /* dataframe */
         [data-testid="stDataFrame"] {border:1px solid var(--border); border-radius:10px;}
@@ -669,42 +682,36 @@ def render_result(r: IrisResult, eye_side: str) -> None:
 # ============================================================================
 #  App layout — eye-side dropdown + two input buttons, then results
 # ============================================================================
-st.session_state.setdefault("input_mode", "upload")
-mode = st.session_state["input_mode"]
+st.session_state.setdefault("show_camera", False)
 
 set_col, up_col, cam_col = st.columns([1.4, 1, 1])
 with set_col:
     eye_side = st.selectbox("Eye side", ["right", "left"], index=0)
 with up_col:
     st.markdown("<div style='height:1.75rem'></div>", unsafe_allow_html=True)
-    if st.button("Upload image", use_container_width=True,
-                 type="primary" if mode == "upload" else "secondary"):
-        st.session_state["input_mode"] = "upload"
-        st.rerun()
-with cam_col:
-    st.markdown("<div style='height:1.75rem'></div>", unsafe_allow_html=True)
-    if st.button("Take an image", use_container_width=True,
-                 type="primary" if mode == "camera" else "secondary"):
-        st.session_state["input_mode"] = "camera"
-        st.rerun()
-
-image_bytes: Optional[bytes] = None
-image_name = "captured.png"
-
-if mode == "upload":
     up = st.file_uploader(
         "Upload an IR iris image",
         type=["png", "jpg", "jpeg", "bmp", "tif", "tiff"],
         accept_multiple_files=False,
         label_visibility="collapsed",
     )
-    if up is not None:
-        image_bytes = up.getvalue()
-        image_name = up.name
-else:
+with cam_col:
+    st.markdown("<div style='height:1.75rem'></div>", unsafe_allow_html=True)
+    if st.button("Take an image", use_container_width=True, type="primary"):
+        st.session_state["show_camera"] = True
+
+image_bytes: Optional[bytes] = None
+image_name = "captured.png"
+
+if up is not None:
+    image_bytes = up.getvalue()
+    image_name = up.name
+
+if st.session_state["show_camera"]:
     shot = st.camera_input("Take a photo", label_visibility="collapsed")
     if shot is not None:
         image_bytes = shot.getvalue()
+        image_name = "captured.png"
     else:
         st.caption("If the camera doesn't appear, allow camera access for this "
                    "site in your browser, then reload.")
