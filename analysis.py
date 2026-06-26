@@ -632,7 +632,12 @@ def _openiris_pupil_near(img, icx, icy, ir, eye_side):
 
 
 def analyze_combined(img, eye_side: str = "right") -> dict:
-    """Iris from MediaPipe + pupil from open-iris (best for visible-light webcam)."""
+    """Iris from MediaPipe + pupil from open-iris (best for visible-light webcam).
+
+    MediaPipe needs the whole face, so detection runs on the full frame; the
+    output is then cropped to a close-up of the eye (around the iris) so the
+    result looks like the open-iris one, with coordinates remapped to the crop.
+    """
     iris_res = _mediapipe_iris(img, eye_side)
     if "error" in iris_res:
         return iris_res
@@ -643,9 +648,25 @@ def analyze_combined(img, eye_side: str = "right") -> dict:
         pupil = _estimate_pupil(img, icx, icy, ir)  # dark-blob fallback
     pcx, pcy, pr = pupil
 
+    # Crop a close-up of the eye around the iris, then remap all coordinates.
+    H, W = img.shape[:2]
+    half = max(ir * 1.8, 20.0)
+    x0, y0 = int(max(0, round(icx - half))), int(max(0, round(icy - half)))
+    x1, y1 = int(min(W, round(icx + half))), int(min(H, round(icy + half)))
+    crop = img[y0:y1, x0:x1]
+    if crop.size == 0:
+        crop, x0, y0 = img, 0, 0
+    scale = 512.0 / max(1, max(crop.shape[:2]))  # upscale to a crisp display size
+    crop = cv2.resize(crop, (max(1, int(crop.shape[1] * scale)),
+                             max(1, int(crop.shape[0] * scale))),
+                      interpolation=cv2.INTER_CUBIC)
+
+    icx, icy, ir = (icx - x0) * scale, (icy - y0) * scale, ir * scale
+    pcx, pcy, pr = (pcx - x0) * scale, (pcy - y0) * scale, pr * scale
+
+    base_png = png_bytes_from_gray(crop)
+    overlay = draw_circles_png(base_png, (pcx, pcy), pr, (icx, icy), ir)
     ipr = ir / pr if pr > 0 else 0.0
-    overlay = draw_circles_png(png_bytes_from_gray(img),
-                               (pcx, pcy), pr, (icx, icy), ir)
     return {
         "ipr": float(ipr),
         "overlay_png": overlay,
@@ -653,6 +674,9 @@ def analyze_combined(img, eye_side: str = "right") -> dict:
         "pupil_radius": float(pr),
         "iris_center": [float(icx), float(icy)],
         "iris_radius": float(ir),
+        "base_png": base_png,
+        "width": int(crop.shape[1]),
+        "height": int(crop.shape[0]),
     }
 
 
@@ -667,11 +691,16 @@ def analyze_one(image_bytes: bytes, name: str, eye_side: str,
         img, _, _ = load_grayscale(image_bytes, max_dimension=MAX_DIM)
         if model == "combined":
             out = analyze_combined(img, eye_side=eye_side)  # MediaPipe iris + open-iris pupil
+            # combined returns its own eye-cropped base image; fall back to the
+            # full frame for the error case (no crop available).
+            base_png = out.get("base_png") or png_bytes_from_gray(img)
+            bw, bh = out.get("width", img.shape[1]), out.get("height", img.shape[0])
         else:
             img = crop_to_eye(img)  # close-up the eye for webcam/wide frames
             out = analyze_iris_image(img, eye_side=eye_side)
-        res.width, res.height = img.shape[1], img.shape[0]
-        res.original_png = png_bytes_from_gray(img)
+            base_png, bw, bh = png_bytes_from_gray(img), img.shape[1], img.shape[0]
+        res.width, res.height = bw, bh
+        res.original_png = base_png
         if "error" in out:
             res.error = out["error"]
         else:
