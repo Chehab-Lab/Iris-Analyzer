@@ -219,23 +219,16 @@ ENGINE_READY = IRIS_OK and CV2_OK
 _mp_face_mesh = None
 MP_ERR = ""
 try:
-    # Import the submodule directly — some mediapipe builds don't expose
-    # `mediapipe.solutions` as a top-level attribute.
     from mediapipe.python.solutions import face_mesh as _mp_face_mesh
 
     MP_OK = True
 except Exception:  # pragma: no cover
-    try:
-        import mediapipe as _mp
+    import traceback as _mptb
 
-        _mp_face_mesh = _mp.solutions.face_mesh
-        MP_OK = True
-    except Exception as _mpe:
-        import traceback as _mptb
-
-        _mp_face_mesh = None
-        MP_OK = False
-        MP_ERR = "".join(_mptb.format_exception_only(type(_mpe), _mpe)).strip()
+    _mp_face_mesh = None
+    MP_OK = False
+    # Full traceback — the canonical import's real failure (often a nested cause).
+    MP_ERR = _mptb.format_exc()
 
 _MP_FACE = None
 
