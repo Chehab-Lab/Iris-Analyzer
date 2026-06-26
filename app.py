@@ -11,6 +11,14 @@ Run with:  streamlit run app.py
 
 from __future__ import annotations
 
+import os
+import sys
+
+# Ensure this app's own directory is first on the import path so the local
+# modules (styles/ui/analysis) always resolve here, regardless of the cwd or any
+# similarly named installed package.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 import styles
 import ui
 
