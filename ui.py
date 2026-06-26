@@ -97,27 +97,6 @@ def _nudge(label: str, key: str, lo: float, hi: float, step: float = 1.0) -> Non
               on_click=_bump, args=(key, step, lo, hi))
 
 
-def _overlay_svg(b64: str, w: int, h: int, pupil, pr, iris, ir) -> str:
-    """Inline SVG: the base image (drawn once) plus the adjustable circles on top.
-    Nudging only changes the circle coordinates — the base image never reloads."""
-    sw = max(1.5, max(w, h) / 250.0)
-    dot = max(2.0, max(w, h) / 90.0)
-    return (
-        f'<div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;line-height:0">'
-        f'<svg viewBox="0 0 {w} {h}" width="100%" xmlns="http://www.w3.org/2000/svg" '
-        f'style="display:block;height:auto">'
-        f'<image href="data:image/png;base64,{b64}" x="0" y="0" width="{w}" height="{h}" '
-        f'preserveAspectRatio="none"/>'
-        f'<circle cx="{pupil[0]:.1f}" cy="{pupil[1]:.1f}" r="{pr:.1f}" fill="none" '
-        f'stroke="#16a34a" stroke-width="{sw:.2f}"/>'
-        f'<circle cx="{iris[0]:.1f}" cy="{iris[1]:.1f}" r="{ir:.1f}" fill="none" '
-        f'stroke="#2563eb" stroke-width="{sw:.2f}"/>'
-        f'<circle cx="{iris[0]:.1f}" cy="{iris[1]:.1f}" r="{dot:.1f}" fill="#7c3aed"/>'
-        f'<circle cx="{pupil[0]:.1f}" cy="{pupil[1]:.1f}" r="{dot:.1f}" fill="#dc2626"/>'
-        f'</svg></div>'
-    )
-
-
 def render_result(r: IrisResult, eye_side: str) -> None:
     """Show the (adjustable) overlay, nudge controls, metrics and downloads."""
     if not r.ok:
@@ -150,13 +129,14 @@ def render_result(r: IrisResult, eye_side: str) -> None:
     icx, icy, ir = st.session_state["adj_icx"], st.session_state["adj_icy"], st.session_state["adj_ir"]
     ipr = ir / pr if pr > 0 else 0.0
 
-    # base image encoded once; only the circle coords change between nudges
-    b64 = base64.b64encode(r.original_png).decode("ascii")
+    # Fast, constant-size overlay (OpenCV). st.image sends a small /media URL
+    # reference — not a large inline message — so rapid nudging won't thrash
+    # Streamlit's ForwardMsg cache, and constant dimensions keep the layout still.
+    overlay = analysis.draw_circles_png(r.original_png, (pcx, pcy), pr, (icx, icy), ir)
 
     img_col, data_col = st.columns([3, 2], gap="large")
     with img_col:
-        st.markdown(_overlay_svg(b64, w, h, (pcx, pcy), pr, (icx, icy), ir),
-                    unsafe_allow_html=True)
+        st.image(overlay, use_container_width=True, caption="Pupil & iris boundaries")
         st.caption("Nudge the centers and radii (± 1 px) to refine the boundaries.")
         pcol, icol = st.columns(2)
         with pcol:
@@ -190,7 +170,6 @@ def render_result(r: IrisResult, eye_side: str) -> None:
             unsafe_allow_html=True,
         )
 
-    overlay = analysis.draw_circles_png(r.original_png, (pcx, pcy), pr, (icx, icy), ir)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     csv = (
         "image,eye_side,ipr,pupil_x,pupil_y,pupil_radius,"
