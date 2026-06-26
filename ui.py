@@ -294,7 +294,15 @@ def render_analyzer() -> None:
     image_bytes, image_name, eye_side, model = _collect_image()
 
     if not analysis.model_ready(model):
-        st.caption("The selected model is not available in this environment.")
+        missing = []
+        if not analysis.CV2_OK:
+            missing.append("opencv")
+        if model == "mediapipe" and not analysis.MP_OK:
+            missing.append("mediapipe")
+        if model == "open-iris" and not analysis.IRIS_OK:
+            missing.append("open-iris engine")
+        st.caption("The selected model is not available in this environment "
+                   f"(missing: {', '.join(missing) or 'unknown'}).")
         return
     if not image_bytes:
         return

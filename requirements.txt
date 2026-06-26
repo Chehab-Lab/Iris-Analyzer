@@ -2,7 +2,7 @@
 # Python 3.11. The deployment MUST run on Python 3.11 (see .python-version
 # and the Streamlit Cloud "Advanced settings" Python-version selector).
 streamlit
-numpy
+numpy<2
 pandas
 matplotlib
 open-iris
