@@ -140,12 +140,12 @@ def render_result(r: IrisResult, eye_side: str) -> None:
         st.caption("Nudge the centers and radii (± 1 px) to refine the boundaries.")
         pcol, icol = st.columns(2)
         with pcol:
-            st.markdown("**Pupil**")
+            st.markdown("<b style='color:#16a34a'>Pupil</b>", unsafe_allow_html=True)
             _nudge("Center X", "adj_pcx", 0.0, float(w))
             _nudge("Center Y", "adj_pcy", 0.0, float(h))
             _nudge("Radius", "adj_pr", 1.0, rmax)
         with icol:
-            st.markdown("**Iris**")
+            st.markdown("<b style='color:#2563eb'>Iris</b>", unsafe_allow_html=True)
             _nudge("Center X", "adj_icx", 0.0, float(w))
             _nudge("Center Y", "adj_icy", 0.0, float(h))
             _nudge("Radius", "adj_ir", 1.0, rmax)
