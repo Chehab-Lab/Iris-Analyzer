@@ -87,7 +87,7 @@ def _bump(key: str, delta: float, lo: float, hi: float) -> None:
 
 def _nudge(label: str, key: str, lo: float, hi: float, step: float = 1.0) -> None:
     """A label with −/+ buttons that nudge a session_state value within [lo, hi]."""
-    c0, c1, c2, c3 = st.columns([3, 1, 1.4, 1])
+    c0, c1, c2, c3 = st.columns([3, 1, 1.4, 1], vertical_alignment="center")
     c0.markdown(f"<div class='nudge-label'>{label}</div>", unsafe_allow_html=True)
     c1.button("−", key=f"{key}_dec", use_container_width=True,
               on_click=_bump, args=(key, -step, lo, hi))
