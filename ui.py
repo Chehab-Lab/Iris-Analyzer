@@ -198,8 +198,8 @@ def render_result(r: IrisResult, eye_side: str) -> None:
 
 
 _MODELS = {
-    "open-iris (IR close-up)": "open-iris",
-    "MediaPipe (webcam)": "mediapipe",
+    "open-iris": "open-iris",
+    "MediaPipe": "mediapipe",
 }
 
 

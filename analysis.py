@@ -216,13 +216,22 @@ ENGINE_READY = IRIS_OK and CV2_OK
 # iris landmarks (center + radius) in RGB; we pair it with a dark-blob pupil
 # estimate to still compute the IPR. Imported defensively.
 # ----------------------------------------------------------------------------
+_mp_face_mesh = None
 try:
-    import mediapipe as mp
+    # Import the submodule directly — some mediapipe builds don't expose
+    # `mediapipe.solutions` as a top-level attribute.
+    from mediapipe.python.solutions import face_mesh as _mp_face_mesh
 
     MP_OK = True
 except Exception:  # pragma: no cover
-    mp = None
-    MP_OK = False
+    try:
+        import mediapipe as _mp
+
+        _mp_face_mesh = _mp.solutions.face_mesh
+        MP_OK = True
+    except Exception:
+        _mp_face_mesh = None
+        MP_OK = False
 
 _MP_FACE = None
 
@@ -538,7 +547,7 @@ _MP_IRIS_B = [474, 475, 476, 477]
 def _get_face_mesh():
     global _MP_FACE
     if _MP_FACE is None:
-        _MP_FACE = mp.solutions.face_mesh.FaceMesh(
+        _MP_FACE = _mp_face_mesh.FaceMesh(
             static_image_mode=True, max_num_faces=1,
             refine_landmarks=True, min_detection_confidence=0.5)
     return _MP_FACE
