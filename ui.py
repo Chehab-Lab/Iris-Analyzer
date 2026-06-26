@@ -303,6 +303,8 @@ def render_analyzer() -> None:
             missing.append("open-iris engine")
         st.caption("The selected model is not available in this environment "
                    f"(missing: {', '.join(missing) or 'unknown'}).")
+        if model == "mediapipe" and analysis.MP_ERR:
+            st.code(analysis.MP_ERR, language="text")
         return
     if not image_bytes:
         return

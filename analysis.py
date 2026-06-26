@@ -217,6 +217,7 @@ ENGINE_READY = IRIS_OK and CV2_OK
 # estimate to still compute the IPR. Imported defensively.
 # ----------------------------------------------------------------------------
 _mp_face_mesh = None
+MP_ERR = ""
 try:
     # Import the submodule directly — some mediapipe builds don't expose
     # `mediapipe.solutions` as a top-level attribute.
@@ -229,9 +230,12 @@ except Exception:  # pragma: no cover
 
         _mp_face_mesh = _mp.solutions.face_mesh
         MP_OK = True
-    except Exception:
+    except Exception as _mpe:
+        import traceback as _mptb
+
         _mp_face_mesh = None
         MP_OK = False
+        MP_ERR = "".join(_mptb.format_exception_only(type(_mpe), _mpe)).strip()
 
 _MP_FACE = None
 
