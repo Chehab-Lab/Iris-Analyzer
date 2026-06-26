@@ -6,4 +6,4 @@ numpy<2
 pandas
 matplotlib
 open-iris
-mediapipe
+mediapipe==0.10.14
