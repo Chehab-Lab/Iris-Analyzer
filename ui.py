@@ -197,8 +197,14 @@ def render_result(r: IrisResult, eye_side: str) -> None:
         )
 
 
-def _collect_image() -> tuple[Optional[bytes], str, str]:
-    """Render the controls and return (image_bytes, image_name, eye_side).
+_MODELS = {
+    "open-iris (IR close-up)": "open-iris",
+    "MediaPipe (webcam)": "mediapipe",
+}
+
+
+def _collect_image() -> tuple[Optional[bytes], str, str, str]:
+    """Render the controls and return (image_bytes, image_name, eye_side, model).
 
     The camera's open/closed state lives in the URL (?cam=1) rather than in
     session_state: granting camera permission requires a page reload, which
@@ -209,9 +215,11 @@ def _collect_image() -> tuple[Optional[bytes], str, str]:
     st.session_state.setdefault("camera_key", 0)
     cam_on = st.query_params.get("cam") == "1"
 
-    set_col, up_col, cam_col = st.columns([1.4, 1, 1])
-    with set_col:
+    eye_col, mdl_col, up_col, cam_col = st.columns([1, 1.5, 1, 1])
+    with eye_col:
         eye_side = st.selectbox("Eye side", ["right", "left"], index=0)
+    with mdl_col:
+        model = _MODELS[st.selectbox("Model", list(_MODELS.keys()), index=0)]
     with up_col:
         st.markdown("<div style='height:1.75rem'></div>", unsafe_allow_html=True)
         up = st.file_uploader(
@@ -265,7 +273,7 @@ def _collect_image() -> tuple[Optional[bytes], str, str]:
         image_bytes = st.session_state["captured_image"]
         image_name = "captured.jpg"
 
-    return image_bytes, image_name, eye_side
+    return image_bytes, image_name, eye_side, model
 
 
 def render_footer() -> None:
@@ -283,22 +291,22 @@ def render_footer() -> None:
 
 def render_analyzer() -> None:
     """The main tool: input controls and the analysis result."""
-    image_bytes, image_name, eye_side = _collect_image()
+    image_bytes, image_name, eye_side, model = _collect_image()
 
-    if not analysis.ENGINE_READY:
-        st.caption("Analysis engine is not available in this environment.")
+    if not analysis.model_ready(model):
+        st.caption("The selected model is not available in this environment.")
         return
     if not image_bytes:
         return
 
-    # Detection (the iris pipeline) is expensive — cache it per image+eye so that
-    # nudging only redoes the cheap computation (overlay + IPR) in render_result,
-    # never the full analysis again.
-    cache_key = (hash(image_bytes), eye_side)
+    # Detection is expensive — cache it per image+eye+model so that nudging only
+    # redoes the cheap computation (overlay + IPR) in render_result, never the
+    # full analysis again.
+    cache_key = (hash(image_bytes), eye_side, model)
     cached = st.session_state.get("analysis_cache")
     if not cached or cached.get("key") != cache_key:
         with st.spinner("Analyzing…"):
-            result = analysis.analyze_one(image_bytes, image_name, eye_side)
+            result = analysis.analyze_one(image_bytes, image_name, eye_side, model)
         st.session_state["analysis_cache"] = {"key": cache_key, "result": result}
     else:
         result = cached["result"]

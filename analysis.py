@@ -211,6 +211,28 @@ except Exception as _e:  # pragma: no cover
 
 ENGINE_READY = IRIS_OK and CV2_OK
 
+# ----------------------------------------------------------------------------
+# MediaPipe — alternative detector for visible-light webcam frames. It returns
+# iris landmarks (center + radius) in RGB; we pair it with a dark-blob pupil
+# estimate to still compute the IPR. Imported defensively.
+# ----------------------------------------------------------------------------
+try:
+    import mediapipe as mp
+
+    MP_OK = True
+except Exception:  # pragma: no cover
+    mp = None
+    MP_OK = False
+
+_MP_FACE = None
+
+
+def model_ready(model: str) -> bool:
+    """Whether the selected detector can run in this environment."""
+    if model == "mediapipe":
+        return MP_OK and CV2_OK
+    return IRIS_OK and CV2_OK
+
 
 # ============================================================================
 #  Data model
@@ -506,22 +528,113 @@ def crop_to_eye(img):
 
 
 # ============================================================================
+#  MediaPipe detector  (iris landmarks + dark-blob pupil estimate)
+# ============================================================================
+# Iris boundary landmark indices in MediaPipe FaceMesh (refine_landmarks=True).
+_MP_IRIS_A = [469, 470, 471, 472]
+_MP_IRIS_B = [474, 475, 476, 477]
+
+
+def _get_face_mesh():
+    global _MP_FACE
+    if _MP_FACE is None:
+        _MP_FACE = mp.solutions.face_mesh.FaceMesh(
+            static_image_mode=True, max_num_faces=1,
+            refine_landmarks=True, min_detection_confidence=0.5)
+    return _MP_FACE
+
+
+def _iris_circle(landmarks, idxs, w, h):
+    pts = np.array([[landmarks[i].x * w, landmarks[i].y * h] for i in idxs],
+                   dtype=np.float32)
+    (cx, cy), r = cv2.minEnclosingCircle(pts)
+    return float(cx), float(cy), float(r)
+
+
+def _estimate_pupil(img, cx, cy, r):
+    """Estimate the pupil as the darkest blob inside the iris circle."""
+    h, w = img.shape[:2]
+    R = max(2, int(round(r)))
+    x0, y0 = max(0, int(round(cx)) - R), max(0, int(round(cy)) - R)
+    x1, y1 = min(w, int(round(cx)) + R), min(h, int(round(cy)) + R)
+    sub = img[y0:y1, x0:x1]
+    fallback = (cx, cy, max(1.0, r * 0.45))
+    if sub.size == 0:
+        return fallback
+    lcx, lcy = cx - x0, cy - y0
+    yy, xx = np.mgrid[0:sub.shape[0], 0:sub.shape[1]]
+    inside = (xx - lcx) ** 2 + (yy - lcy) ** 2 <= (r * 0.9) ** 2
+    if not inside.any():
+        return fallback
+    thr = float(np.percentile(sub[inside], 25))  # darkest quarter within the iris
+    dark = np.zeros(sub.shape, np.uint8)
+    dark[inside & (sub <= thr)] = 255
+    dark = cv2.morphologyEx(dark, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+    cnts, _ = cv2.findContours(dark, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not cnts:
+        return fallback
+    (pcx, pcy), pr = cv2.minEnclosingCircle(max(cnts, key=cv2.contourArea))
+    return float(pcx + x0), float(pcy + y0), max(1.0, float(pr))
+
+
+def analyze_mediapipe(img, eye_side: str = "right") -> dict:
+    """Detect iris (MediaPipe) + pupil (dark blob) on a visible-light frame."""
+    if not MP_OK:
+        return {"error": "MediaPipe is not installed in this environment."}
+    h, w = img.shape[:2]
+    try:
+        rgb = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+        result = _get_face_mesh().process(rgb)
+    except Exception as e:
+        return {"error": f"MediaPipe failed: {e}"}
+    if not result.multi_face_landmarks:
+        return {"error": "MediaPipe could not find an eye. Use a clear, front-facing "
+                         "shot with the eye region visible."}
+
+    lm = result.multi_face_landmarks[0].landmark
+    ax, ay, ar = _iris_circle(lm, _MP_IRIS_A, w, h)
+    bx, by, br = _iris_circle(lm, _MP_IRIS_B, w, h)
+    # Pick the eye by horizontal position (subject's right eye is on the left of a
+    # normal frame; flip the Eye-side selector if the labels look swapped).
+    left_eye = (ax, ay, ar) if ax <= bx else (bx, by, br)
+    right_eye = (bx, by, br) if ax <= bx else (ax, ay, ar)
+    icx, icy, ir = right_eye if eye_side == "right" else left_eye
+
+    pcx, pcy, pr = _estimate_pupil(img, icx, icy, ir)
+    ipr = ir / pr if pr > 0 else 0.0
+    overlay = draw_circles_png(png_bytes_from_gray(img),
+                               (pcx, pcy), pr, (icx, icy), ir)
+    return {
+        "ipr": float(ipr),
+        "overlay_png": overlay,
+        "pupil_center": [float(pcx), float(pcy)],
+        "pupil_radius": float(pr),
+        "iris_center": [float(icx), float(icy)],
+        "iris_radius": float(ir),
+    }
+
+
+# ============================================================================
 #  Single-image entry point
 # ============================================================================
-def analyze_one(image_bytes: bytes, name: str, eye_side: str) -> IrisResult:
-    """Decode + analyze one image and return a populated IrisResult."""
+def analyze_one(image_bytes: bytes, name: str, eye_side: str,
+                model: str = "open-iris") -> IrisResult:
+    """Decode + analyze one image with the selected detector."""
     res = IrisResult(name=name)
     try:
         img, _, _ = load_grayscale(image_bytes, max_dimension=MAX_DIM)
-        img = crop_to_eye(img)  # close-up the eye for webcam/wide frames
+        if model == "mediapipe":
+            out = analyze_mediapipe(img, eye_side=eye_side)  # needs the eye context
+        else:
+            img = crop_to_eye(img)  # close-up the eye for webcam/wide frames
+            out = analyze_iris_image(img, eye_side=eye_side)
         res.width, res.height = img.shape[1], img.shape[0]
         res.original_png = png_bytes_from_gray(img)
-        out = analyze_iris_image(img, eye_side=eye_side)
         if "error" in out:
             res.error = out["error"]
         else:
             res.ok = True
-            res.overlay_png = out["overlay_png"]
+            res.overlay_png = out.get("overlay_png")
             res.ipr = out["ipr"]
             res.pupil_center = tuple(out["pupil_center"])
             res.pupil_radius = out["pupil_radius"]
