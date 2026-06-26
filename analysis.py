@@ -235,8 +235,8 @@ _MP_FACE = None
 
 def model_ready(model: str) -> bool:
     """Whether the selected detector can run in this environment."""
-    if model == "mediapipe":
-        return MP_OK and CV2_OK
+    if model == "combined":
+        return IRIS_OK and MP_OK and CV2_OK
     return IRIS_OK and CV2_OK
 
 
@@ -583,8 +583,8 @@ def _estimate_pupil(img, cx, cy, r):
     return float(pcx + x0), float(pcy + y0), max(1.0, float(pr))
 
 
-def analyze_mediapipe(img, eye_side: str = "right") -> dict:
-    """Detect iris (MediaPipe) + pupil (dark blob) on a visible-light frame."""
+def _mediapipe_iris(img, eye_side: str = "right") -> dict:
+    """Locate the iris circle with MediaPipe. Returns {'iris': (cx,cy,r)} or error."""
     if not MP_OK:
         return {"error": "MediaPipe is not installed in this environment."}
     h, w = img.shape[:2]
@@ -605,8 +605,44 @@ def analyze_mediapipe(img, eye_side: str = "right") -> dict:
     left_eye = (ax, ay, ar) if ax <= bx else (bx, by, br)
     right_eye = (bx, by, br) if ax <= bx else (ax, ay, ar)
     icx, icy, ir = right_eye if eye_side == "right" else left_eye
+    return {"iris": (float(icx), float(icy), float(ir))}
 
-    pcx, pcy, pr = _estimate_pupil(img, icx, icy, ir)
+
+def _openiris_pupil_near(img, icx, icy, ir, eye_side):
+    """Run open-iris on a crop around the iris and return the pupil (cx,cy,r) in
+    full-image coordinates, or None if it fails."""
+    h, w = img.shape[:2]
+    side = max(40.0, ir * 4.0)
+    x0, y0 = int(max(0, icx - side / 2)), int(max(0, icy - side / 2))
+    x1, y1 = int(min(w, icx + side / 2)), int(min(h, icy + side / 2))
+    sub = img[y0:y1, x0:x1]
+    if sub.size == 0:
+        return None
+    scale = 1.0
+    longest = max(sub.shape[:2])
+    if longest < 640:
+        scale = 640.0 / longest
+        sub = cv2.resize(sub, (int(sub.shape[1] * scale), int(sub.shape[0] * scale)),
+                         interpolation=cv2.INTER_CUBIC)
+    out = analyze_iris_image(sub, eye_side=eye_side)
+    if "error" in out:
+        return None
+    pcx_c, pcy_c = out["pupil_center"]
+    return (x0 + pcx_c / scale, y0 + pcy_c / scale, out["pupil_radius"] / scale)
+
+
+def analyze_combined(img, eye_side: str = "right") -> dict:
+    """Iris from MediaPipe + pupil from open-iris (best for visible-light webcam)."""
+    iris_res = _mediapipe_iris(img, eye_side)
+    if "error" in iris_res:
+        return iris_res
+    icx, icy, ir = iris_res["iris"]
+
+    pupil = _openiris_pupil_near(img, icx, icy, ir, eye_side)
+    if pupil is None:
+        pupil = _estimate_pupil(img, icx, icy, ir)  # dark-blob fallback
+    pcx, pcy, pr = pupil
+
     ipr = ir / pr if pr > 0 else 0.0
     overlay = draw_circles_png(png_bytes_from_gray(img),
                                (pcx, pcy), pr, (icx, icy), ir)
@@ -629,8 +665,8 @@ def analyze_one(image_bytes: bytes, name: str, eye_side: str,
     res = IrisResult(name=name)
     try:
         img, _, _ = load_grayscale(image_bytes, max_dimension=MAX_DIM)
-        if model == "mediapipe":
-            out = analyze_mediapipe(img, eye_side=eye_side)  # needs the eye context
+        if model == "combined":
+            out = analyze_combined(img, eye_side=eye_side)  # MediaPipe iris + open-iris pupil
         else:
             img = crop_to_eye(img)  # close-up the eye for webcam/wide frames
             out = analyze_iris_image(img, eye_side=eye_side)

@@ -198,8 +198,8 @@ def render_result(r: IrisResult, eye_side: str) -> None:
 
 
 _MODELS = {
-    "open-iris": "open-iris",
-    "MediaPipe": "mediapipe",
+    "Open-iris": "open-iris",
+    "Open-iris + MediaPipe": "combined",
 }
 
 
@@ -297,13 +297,13 @@ def render_analyzer() -> None:
         missing = []
         if not analysis.CV2_OK:
             missing.append("opencv")
-        if model == "mediapipe" and not analysis.MP_OK:
-            missing.append("mediapipe")
-        if model == "open-iris" and not analysis.IRIS_OK:
+        if not analysis.IRIS_OK:
             missing.append("open-iris engine")
+        if model == "combined" and not analysis.MP_OK:
+            missing.append("mediapipe")
         st.caption("The selected model is not available in this environment "
                    f"(missing: {', '.join(missing) or 'unknown'}).")
-        if model == "mediapipe" and analysis.MP_ERR:
+        if model == "combined" and not analysis.MP_OK and analysis.MP_ERR:
             st.code(analysis.MP_ERR, language="text")
         return
     if not image_bytes:
@@ -378,6 +378,22 @@ def render_about() -> None:
 
     st.markdown(
         """
+        <div class="iris-card">
+            <h3>Models</h3>
+            <p><b>Open-iris</b> — a deep-learning segmentation pipeline (open-iris)
+            trained on <b>near-infrared, close-up</b> iris images. It detects both the
+            iris and the pupil. Most accurate on uploaded IR iris photos or images
+            from a dedicated/medical iris camera. In ordinary visible light or from a
+            distance it can struggle and may confuse the iris with the pupil.</p>
+            <p><b>Open-iris + MediaPipe</b> — the <b>iris</b> boundary comes from
+            MediaPipe FaceMesh (robust on visible-light webcam frames where the whole
+            eye/face is visible) and the <b>pupil</b> from open-iris. Best for ordinary
+            webcam captures. It needs a visible face/eye, so it won't work on a tight
+            iris close-up with no surrounding face.</p>
+            <p><b>Rule of thumb:</b> average webcam → <b>Open-iris + MediaPipe</b>;
+            uploaded images or a medical/IR iris camera → <b>Open-iris</b>.</p>
+        </div>
+
         <div class="iris-card">
             <h3>Authors</h3>
             <p>Noha Faour &nbsp;·&nbsp; Ahmad Mustapha &nbsp;·&nbsp; Ali Chehab</p>
