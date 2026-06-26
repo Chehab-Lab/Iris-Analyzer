@@ -138,7 +138,7 @@ def render_result(r: IrisResult, eye_side: str) -> None:
     with img_col:
         st.image(overlay, use_container_width=True, caption="Pupil & iris boundaries")
         st.caption("Nudge the centers and radii (± 1 px) to refine the boundaries.")
-        pcol, icol = st.columns(2)
+        pcol, icol = st.columns(2, gap="large")
         with pcol:
             st.markdown("<b style='color:#16a34a'>Pupil</b>", unsafe_allow_html=True)
             _nudge("Center X", "adj_pcx", 0.0, float(w))
