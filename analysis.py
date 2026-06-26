@@ -650,7 +650,7 @@ def analyze_combined(img, eye_side: str = "right") -> dict:
 
     # Crop a close-up of the eye around the iris, then remap all coordinates.
     H, W = img.shape[:2]
-    half = max(ir * 1.8, 20.0)
+    half = max(ir * 2.8, 20.0)  # wider crop = a bit more context around the eye
     x0, y0 = int(max(0, round(icx - half))), int(max(0, round(icy - half)))
     x1, y1 = int(min(W, round(icx + half))), int(min(H, round(icy + half)))
     crop = img[y0:y1, x0:x1]
