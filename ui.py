@@ -37,9 +37,9 @@ _camera_hires = components.declare_component(
 )
 
 
-def hires_camera(key: str = "camera", *, height: int = 680) -> Optional[bytes]:
+def hires_camera(key: str = "camera") -> Optional[bytes]:
     """Render the hi-res webcam component; return JPEG bytes once captured."""
-    data_url = _camera_hires(key=key, default=None, height=height)
+    data_url = _camera_hires(key=key, default=None)
     if not data_url or "," not in data_url:
         return None
     try:
@@ -326,7 +326,7 @@ def _render_camera_step(eye_side: str, model: str) -> None:
         "Fill the frame with the eye. On phones the **rear camera** opens by default — "
         "use **Flip camera** if needed."
     )
-    shot = hires_camera(key=f"camera_{st.session_state.get('camera_key', 0)}", height=720)
+    shot = hires_camera(key=f"camera_{st.session_state.get('camera_key', 0)}")
     if shot is not None:
         st.session_state.pending_bytes = shot
         st.session_state.pending_name = "captured.jpg"
