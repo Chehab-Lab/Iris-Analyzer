@@ -1,0 +1,93 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  .crop-actions-row {
+    display: flex;
+    gap: 10px;
+    padding: 4px 0 8px;
+  }
+  .crop-action {
+    flex: 1;
+    font: inherit;
+    font-weight: 600;
+    font-size: 0.95rem;
+    border-radius: 10px;
+    padding: 0.65rem 1rem;
+    cursor: pointer;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    color: #1f2937;
+  }
+  .crop-action.primary {
+    background: #2563eb;
+    border-color: #2563eb;
+    color: #fff;
+  }
+  .crop-action:active { opacity: 0.88; }
+</style>
+</head>
+<body>
+  <div class="crop-actions-row">
+    <button type="button" class="crop-action primary" id="apply">Apply crop</button>
+    <button type="button" class="crop-action" id="reset">Reset</button>
+  </div>
+
+<script>
+  function _send(type, data) {
+    window.parent.postMessage(Object.assign({ isStreamlitMessage: true, type: type }, data), "*");
+  }
+  function ready()      { _send("streamlit:componentReady", { apiVersion: 1 }); }
+  function setHeight(h) { _send("streamlit:setFrameHeight", { height: h }); }
+  function setValue(v)  { _send("streamlit:setComponentValue", { value: v, dataType: "json" }); }
+
+  let crop = { left: 0, top: 0, right: 1, bottom: 1 };
+
+  function parentRect() {
+    try {
+      const p = window.parent.__irisCrop;
+      if (p && typeof p.left === "number") return p;
+    } catch (e) {}
+    return crop;
+  }
+
+  function onCropMessage(e) {
+    if (e.data && e.data.type === "iris-crop" && e.data.rect) {
+      crop = e.data.rect;
+      try { window.parent.__irisCrop = crop; } catch (err) {}
+    }
+  }
+
+  document.getElementById("apply").addEventListener("click", function () {
+    setValue({ action: "apply", rect: parentRect() });
+  });
+
+  document.getElementById("reset").addEventListener("click", function () {
+    crop = { left: 0, top: 0, right: 1, bottom: 1 };
+    try { window.parent.__irisCrop = crop; } catch (err) {}
+    setValue({ action: "reset" });
+  });
+
+  window.addEventListener("message", function (event) {
+    if (event.data && event.data.type === "streamlit:render") {
+      const args = event.data.args || {};
+      if (args.default_rect) {
+        crop = args.default_rect;
+        try { window.parent.__irisCrop = crop; } catch (err) {}
+      }
+      setHeight(document.body.scrollHeight + 4);
+    }
+  });
+
+  window.parent.addEventListener("message", onCropMessage);
+  ready();
+  setHeight(document.body.scrollHeight + 4);
+</script>
+</body>
+</html>

@@ -78,6 +78,52 @@ def inject_css() -> None:
             width: 100% !important;
         }
 
+        /* Take photo + upload — same row, same height */
+        .input-btn-spacer {
+            height: 1.75rem; margin: 0; padding: 0;
+            line-height: 0; font-size: 0; overflow: hidden;
+        }
+        .block-container:has(#take-photo-anchor) [data-testid="stHorizontalBlock"]:has([data-testid="stFileUploader"]) {
+            align-items: center !important;
+            gap: 0.5rem !important;
+        }
+        .block-container:has(#take-photo-anchor) [data-testid="stHorizontalBlock"]:has([data-testid="stFileUploader"]) [data-testid="stVerticalBlock"] {
+            gap: 0 !important;
+            justify-content: flex-end !important;
+        }
+        .block-container:has(#take-photo-anchor) [data-testid="stHorizontalBlock"]:has([data-testid="stFileUploader"]) [data-testid="element-container"] {
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        .block-container:has(#take-photo-anchor) [data-testid="stMarkdown"] {
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        .block-container:has(#take-photo-anchor) [data-testid="stFileUploader"] {
+            margin: 0 !important;
+        }
+        .block-container:has(#take-photo-anchor) [data-testid="stFileUploaderDropzone"] {
+            box-sizing: border-box !important;
+            height: 42px !important;
+            min-height: 42px !important;
+            max-height: 42px !important;
+        }
+        .block-container:has(#take-photo-anchor) [data-testid="stCustomComponentV1"] {
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        .block-container:has(#take-photo-anchor) iframe {
+            width: 100% !important;
+            height: 42px !important;
+            min-height: 42px !important;
+            max-height: 42px !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            display: block !important;
+            border: none !important;
+        }
+
         /* ---- Top nav bar ---- */
         .iris-nav {
             position: fixed; top: 0; left: 0; right: 0; z-index: 999;

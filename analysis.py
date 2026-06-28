@@ -328,7 +328,8 @@ def _friendly_pipeline_hint(detail: str) -> str:
     if "VectorizationError" in text or "Number of contours" in text:
         return (
             "The model could not find a single clear iris boundary. "
-            "Try a less aggressive crop, recapture closer to the eye, or verify the eye-side setting."
+            "Try recapturing closer to the eye, use the Open-iris + MediaPipe model "
+            "for RGB/webcam photos, or verify the eye-side setting."
         )
     if text:
         return text
@@ -482,8 +483,15 @@ def analyze_iris_image(img_pixels, eye_side: str = "right") -> dict:
 # ============================================================================
 def load_grayscale(file_bytes: bytes, max_dimension: int = 800):
     """Decode → grayscale → smart-resize. Returns (img, w, h) or raises."""
-    nparr = np.frombuffer(file_bytes, np.uint8)
-    img = cv2.imdecode(nparr, cv2.IMREAD_GRAYSCALE)
+    img = None
+    try:
+        from PIL import Image, ImageOps
+
+        pil = ImageOps.exif_transpose(Image.open(io.BytesIO(file_bytes))).convert("L")
+        img = np.array(pil, dtype=np.uint8)
+    except Exception:
+        nparr = np.frombuffer(file_bytes, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_GRAYSCALE)
     if img is None:
         raise ValueError("Invalid or unsupported image file.")
     h, w = img.shape[:2]
@@ -527,6 +535,10 @@ def crop_to_eye(img):
     upscale, so the model sees a proper close-up. This is a no-op when no eye is
     found or the eye already fills the frame (e.g. an uploaded iris close-up).
     """
+    H, W = img.shape[:2]
+    if max(H, W) <= 900 and min(H, W) / max(H, W) > 0.72:
+        return img  # already a square close-up — skip auto-crop
+
     cascade = _get_eye_cascade()
     if cascade is None:
         return img
