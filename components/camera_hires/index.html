@@ -2,98 +2,158 @@
 <html>
 <head>
 <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <style>
-  html, body {margin:0; padding:0;}
+  html, body { margin: 0; padding: 0; }
   body {
-    font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    color:#1f2937;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #1f2937;
+    background: #e8ecf4;
   }
-  .wrap {display:flex; flex-direction:column; gap:8px;}
+  .wrap { display: flex; flex-direction: column; gap: 12px; padding: 4px 0 8px; }
+  .video-shell {
+    position: relative;
+    width: 100%;
+    background: #000;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+  }
   video {
-    width:100%; max-height:520px; background:#000;
-    border:1px solid #e5e7eb; border-radius:10px;
+    display: block;
+    width: 100%;
+    max-height: min(72vh, 640px);
+    object-fit: cover;
+    background: #000;
   }
-  .row {display:flex; gap:8px; align-items:center;}
+  .row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
   button {
-    font:inherit; font-weight:500; border-radius:8px; padding:.55rem 1rem;
-    cursor:pointer; border:1px solid #2563eb; background:#2563eb; color:#fff;
-    transition:background .12s ease;
+    font: inherit;
+    font-weight: 600;
+    border-radius: 10px;
+    padding: 0.65rem 1rem;
+    cursor: pointer;
+    border: 1px solid #2563eb;
+    background: #2563eb;
+    color: #fff;
+    transition: background 0.12s ease;
   }
-  button:hover {background:#1d4ed8;}
-  button.sec {background:#fff; color:#1f2937; border-color:#d1d5db;}
-  button.sec:hover {background:#f7f8fa;}
-  .hint {font-size:.8rem; color:#6b7280;}
+  button:hover { background: #1d4ed8; }
+  button.sec {
+    background: #fff;
+    color: #1f2937;
+    border-color: #d1d5db;
+  }
+  button.sec:hover { background: #f7f8fa; }
+  .hint { font-size: 0.82rem; color: #64748b; flex: 1; min-width: 180px; }
 </style>
 </head>
 <body>
   <div class="wrap">
-    <video id="video" autoplay playsinline muted></video>
+    <div class="video-shell">
+      <video id="video" autoplay playsinline muted></video>
+    </div>
     <div class="row">
       <button id="capture">Capture photo</button>
+      <button id="flip" class="sec" type="button">Flip camera</button>
       <span class="hint" id="hint">Starting camera…</span>
     </div>
   </div>
 
 <script>
-  // ---- Streamlit component protocol (vanilla, no React) ----
   function _send(type, data) {
     window.parent.postMessage(Object.assign({ isStreamlitMessage: true, type: type }, data), "*");
   }
-  function ready()        { _send("streamlit:componentReady", { apiVersion: 1 }); }
-  function setHeight(h)   { _send("streamlit:setFrameHeight", { height: h }); }
-  function setValue(v)    { _send("streamlit:setComponentValue", { value: v, dataType: "json" }); }
+  function ready()      { _send("streamlit:componentReady", { apiVersion: 1 }); }
+  function setHeight(h) { _send("streamlit:setFrameHeight", { height: h }); }
+  function setValue(v)  { _send("streamlit:setComponentValue", { value: v, dataType: "json" }); }
 
   const video   = document.getElementById("video");
   const capture = document.getElementById("capture");
+  const flip    = document.getElementById("flip");
   const hint    = document.getElementById("hint");
 
-  let started = false;
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+    || (navigator.maxTouchPoints > 1 && window.matchMedia("(pointer: coarse)").matches);
+
+  let stream = null;
+  let facingMode = isMobile ? "environment" : "user";
+  let starting = false;
 
   function reportHeight() {
-    setHeight(document.body.scrollHeight + 8);
+    setHeight(document.body.scrollHeight + 12);
+  }
+
+  function stopStream() {
+    if (!stream) return;
+    stream.getTracks().forEach(function (track) { track.stop(); });
+    stream = null;
+    video.srcObject = null;
   }
 
   async function startCamera() {
+    if (starting) return;
+    starting = true;
+    stopStream();
+    hint.textContent = "Starting camera…";
     try {
-      // Ask for the highest resolution the device can provide.
-      const stream = await navigator.mediaDevices.getUserMedia({
+      const constraints = {
         audio: false,
         video: {
-          facingMode: "user",
+          facingMode: { ideal: facingMode },
           width:  { ideal: 4096 },
           height: { ideal: 2160 },
         },
-      });
+      };
+      stream = await navigator.mediaDevices.getUserMedia(constraints);
       video.srcObject = stream;
       await video.play();
       const track = stream.getVideoTracks()[0];
       const s = track.getSettings ? track.getSettings() : {};
-      hint.textContent = "Live: " + (s.width || video.videoWidth) + "×" + (s.height || video.videoHeight) +
-                         " — click Capture photo";
+      const label = facingMode === "environment" ? "Rear camera" : "Front camera";
+      hint.textContent = label + ": " + (s.width || video.videoWidth) + "×" + (s.height || video.videoHeight);
     } catch (e) {
-      hint.textContent = "Camera error: " + (e && e.message ? e.message : e) +
-                         ". Allow camera access, then reload.";
+      if (facingMode === "environment") {
+        facingMode = "user";
+        starting = false;
+        return startCamera();
+      }
+      hint.textContent = "Camera error: " + (e && e.message ? e.message : e)
+        + ". Allow camera access, then reload.";
+    } finally {
+      starting = false;
     }
     reportHeight();
   }
 
+  flip.addEventListener("click", function () {
+    facingMode = facingMode === "environment" ? "user" : "environment";
+    startCamera();
+  });
+
   capture.addEventListener("click", function () {
-    if (!video.videoWidth) { return; }
+    if (!video.videoWidth) return;
     const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;     // native capture resolution
+    canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
     const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
     setValue(dataUrl);
-    hint.textContent = "Captured " + canvas.width + "×" + canvas.height +
-                       " — capture again to retake";
+    hint.textContent = "Captured " + canvas.width + "×" + canvas.height + " — capture again to retake";
   });
 
-  // Streamlit sends "streamlit:render" after the component is ready.
   window.addEventListener("message", function (event) {
-    if (event.data && event.data.type === "streamlit:render" && !started) {
-      started = true;
-      startCamera();
+    if (event.data && event.data.type === "streamlit:render") {
+      const args = event.data.args || {};
+      if (args.default_facing === "user" || args.default_facing === "environment") {
+        facingMode = args.default_facing;
+      }
+      if (!stream && !starting) startCamera();
     }
   });
 

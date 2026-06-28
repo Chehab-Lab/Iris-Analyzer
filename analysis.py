@@ -363,7 +363,9 @@ def analyze_iris_image(img_pixels, eye_side: str = "right") -> dict:
         # Step 1 — initial pass for segmentation
         try:
             iris_pipeline_temp = iris.IRISPipeline(env=iris.IRISPipeline.DEBUGGING_ENVIRONMENT)
-            _ = iris_pipeline_temp(img_data=img_pixels, eye_side=eye_side)
+            _ = iris_pipeline_temp.run(
+                ir_image=iris.IRImage(img_data=img_pixels, eye_side=eye_side)
+            )
         except Exception as e:
             return {"error": f"Failed to initialize IRIS pipeline: {e}"}
 
@@ -400,7 +402,9 @@ def analyze_iris_image(img_pixels, eye_side: str = "right") -> dict:
         # Step 5 — final pipeline on cleaned image
         try:
             iris_pipeline = iris.IRISPipeline(env=iris.IRISPipeline.DEBUGGING_ENVIRONMENT)
-            output = iris_pipeline(img_data=img_cleaned, eye_side=eye_side)
+            output = iris_pipeline.run(
+                ir_image=iris.IRImage(img_data=img_cleaned, eye_side=eye_side)
+            )
         except Exception as e:
             return {"error": f"Failed to run final IRIS pipeline: {e}"}
 
