@@ -13,16 +13,18 @@
   .wrap { display: flex; flex-direction: column; gap: 12px; padding: 4px 0 8px; }
   .video-shell {
     width: 100%;
+    margin: 0 auto;
     background: #000;
     border-radius: 12px;
     overflow: hidden;
     border: 1px solid rgba(15, 23, 42, 0.08);
+    line-height: 0;
   }
   video {
     display: block;
     width: 100%;
-    height: auto;
-    max-height: 70vh;
+    height: 100%;
+    object-fit: cover;
     background: #000;
   }
   .row {
@@ -73,6 +75,7 @@
   function setValue(v)  { _send("streamlit:setComponentValue", { value: v, dataType: "json" }); }
 
   const video   = document.getElementById("video");
+  const shell   = document.querySelector(".video-shell");
   const capture = document.getElementById("capture");
   const flip    = document.getElementById("flip");
   const hint    = document.getElementById("hint");
@@ -86,6 +89,22 @@
 
   function reportHeight() {
     setHeight(document.body.scrollHeight + 8);
+  }
+
+  function layoutVideo() {
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    if (!vw || !vh) return;
+
+    const containerW = document.body.clientWidth || window.innerWidth;
+    const maxH = Math.min(window.innerHeight * 0.72, isMobile ? window.innerHeight * 0.62 : 640);
+    let displayH = containerW * (vh / vw);
+    if (displayH > maxH) displayH = maxH;
+
+    shell.style.width = "100%";
+    shell.style.height = displayH + "px";
+    video.style.objectFit = displayH >= containerW * (vh / vw) - 1 ? "fill" : "cover";
+    reportHeight();
   }
 
   function stopStream() {
@@ -115,6 +134,7 @@
       const s = track.getSettings ? track.getSettings() : {};
       const label = facingMode === "environment" ? "Rear camera" : "Front camera";
       hint.textContent = label + ": " + (s.width || video.videoWidth) + "×" + (s.height || video.videoHeight);
+      layoutVideo();
     } catch (e) {
       if (facingMode === "environment") {
         facingMode = "user";
@@ -126,7 +146,6 @@
     } finally {
       starting = false;
     }
-    reportHeight();
   }
 
   flip.addEventListener("click", function () {
@@ -155,8 +174,8 @@
     }
   });
 
-  video.addEventListener("loadedmetadata", reportHeight);
-  window.addEventListener("resize", reportHeight);
+  video.addEventListener("loadedmetadata", layoutVideo);
+  window.addEventListener("resize", layoutVideo);
   ready();
   reportHeight();
 </script>

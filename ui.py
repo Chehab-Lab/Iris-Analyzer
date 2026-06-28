@@ -322,10 +322,7 @@ def _work_titles() -> dict[str, str]:
 def _render_camera_step(eye_side: str, model: str) -> None:
     """Dedicated full-page camera capture — rear camera on phones, webcam on laptops."""
     st.markdown('<div id="camera-screen-anchor"></div>', unsafe_allow_html=True)
-    st.caption(
-        "Fill the frame with the eye. On phones the **rear camera** opens by default — "
-        "use **Flip camera** if needed."
-    )
+    st.caption("Fill the frame with the eye.")
     shot = hires_camera(key=f"camera_{st.session_state.get('camera_key', 0)}")
     if shot is not None:
         st.session_state.pending_bytes = shot
