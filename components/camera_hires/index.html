@@ -11,9 +11,22 @@
     background: #e8ecf4;
   }
   .wrap { display: flex; flex-direction: column; gap: 12px; padding: 4px 0 8px; }
+  .panel { width: 100%; }
+
+  /* ---- Mobile: native phone camera (auto-opens) ---- */
+  .mobile-only { display: none; }
+  .native-shell {
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    padding: 12px 16px;
+  }
+  .native-shell .lead {
+    margin: 0; font-size: 0.88rem; color: #64748b; text-align: center;
+  }
+
+  /* ---- Desktop: live webcam ---- */
+  .desktop-only { display: block; }
   .video-shell {
     width: 100%;
-    margin: 0 auto;
     background: #000;
     border-radius: 12px;
     overflow: hidden;
@@ -26,43 +39,44 @@
     height: 100%;
     object-fit: cover;
     background: #000;
+    transform: none;
   }
   .row {
-    display: flex;
-    gap: 10px;
-    align-items: center;
-    flex-wrap: wrap;
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    margin-top: 12px;
   }
   button {
-    font: inherit;
-    font-weight: 600;
-    border-radius: 10px;
-    padding: 0.65rem 1rem;
-    cursor: pointer;
-    border: 1px solid #2563eb;
-    background: #2563eb;
-    color: #fff;
-    transition: background 0.12s ease;
+    font: inherit; font-weight: 600; border-radius: 10px;
+    padding: 0.65rem 1rem; cursor: pointer;
+    border: 1px solid #2563eb; background: #2563eb; color: #fff;
   }
-  button:hover { background: #1d4ed8; }
   button.sec {
-    background: #fff;
-    color: #1f2937;
-    border-color: #d1d5db;
+    background: #fff; color: #1f2937; border-color: #d1d5db;
   }
-  button.sec:hover { background: #f7f8fa; }
   .hint { font-size: 0.82rem; color: #64748b; flex: 1; min-width: 180px; }
+
+  .mobile-only { display: none; }
+  .desktop-only { display: block; }
 </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="video-shell">
-      <video id="video" autoplay playsinline muted></video>
+    <div id="mobile-panel" class="panel mobile-only">
+      <div class="native-shell">
+        <p class="lead" id="native-hint">Opening camera…</p>
+        <input type="file" id="native-input" accept="image/*" capture="environment" hidden />
+      </div>
     </div>
-    <div class="row">
-      <button id="capture">Capture photo</button>
-      <button id="flip" class="sec" type="button">Flip camera</button>
-      <span class="hint" id="hint">Starting camera…</span>
+
+    <div id="desktop-panel" class="panel desktop-only">
+      <div class="video-shell">
+        <video id="video" autoplay playsinline muted></video>
+      </div>
+      <div class="row">
+        <button type="button" id="capture">Capture photo</button>
+        <button type="button" id="flip" class="sec">Flip camera</button>
+        <span class="hint" id="hint">Starting camera…</span>
+      </div>
     </div>
   </div>
 
@@ -74,36 +88,84 @@
   function setHeight(h) { _send("streamlit:setFrameHeight", { height: h }); }
   function setValue(v)  { _send("streamlit:setComponentValue", { value: v, dataType: "json" }); }
 
-  const video   = document.getElementById("video");
-  const shell   = document.querySelector(".video-shell");
-  const capture = document.getElementById("capture");
-  const flip    = document.getElementById("flip");
-  const hint    = document.getElementById("hint");
+  function isPhoneDevice() {
+    var ua = navigator.userAgent || "";
+    if (/Android.*Mobile|iPhone|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua)) {
+      return true;
+    }
+    if (/iPad/i.test(ua)) return true;
+    if (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1 && window.innerWidth <= 1024) {
+      return true;
+    }
+    return false;
+  }
 
-  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
-    || (navigator.maxTouchPoints > 1 && window.matchMedia("(pointer: coarse)").matches);
+  const isMobile = isPhoneDevice();
+  const mobilePanel  = document.getElementById("mobile-panel");
+  const desktopPanel = document.getElementById("desktop-panel");
+
+  const nativeInput = document.getElementById("native-input");
+  const nativeHint  = document.getElementById("native-hint");
+  const video       = document.getElementById("video");
+  const shell       = document.querySelector(".video-shell");
+  const capture     = document.getElementById("capture");
+  const flip        = document.getElementById("flip");
+  const hint        = document.getElementById("hint");
 
   let stream = null;
-  let facingMode = isMobile ? "environment" : "user";
+  let facingMode = "user";
   let starting = false;
+
+  function applyMode() {
+    if (isMobile) {
+      mobilePanel.style.display = "block";
+      desktopPanel.style.display = "none";
+    } else {
+      mobilePanel.style.display = "none";
+      desktopPanel.style.display = "block";
+    }
+  }
 
   function reportHeight() {
     setHeight(document.body.scrollHeight + 8);
   }
 
+  let nativeOpened = false;
+
+  function openNativeCamera() {
+    if (!nativeInput || nativeOpened) return;
+    nativeOpened = true;
+    nativeInput.click();
+  }
+
+  nativeInput.addEventListener("change", function () {
+    const file = nativeInput.files && nativeInput.files[0];
+    if (!file) {
+      nativeOpened = false;
+      if (nativeHint) nativeHint.textContent = "Tap back to try again.";
+      return;
+    }
+    if (nativeHint) nativeHint.textContent = "Processing photo…";
+    const reader = new FileReader();
+    reader.onload = function () { setValue(reader.result); };
+    reader.readAsDataURL(file);
+  });
+
+  nativeInput.addEventListener("cancel", function () {
+    nativeOpened = false;
+    if (nativeHint) nativeHint.textContent = "Camera closed. Tap back to retry.";
+  });
+
   function layoutVideo() {
+    if (!shell || !video.videoWidth) return;
     const vw = video.videoWidth;
     const vh = video.videoHeight;
-    if (!vw || !vh) return;
-
     const containerW = document.body.clientWidth || window.innerWidth;
-    const maxH = Math.min(window.innerHeight * 0.72, isMobile ? window.innerHeight * 0.62 : 640);
+    const maxH = Math.min(window.innerHeight * 0.72, 640);
     let displayH = containerW * (vh / vw);
     if (displayH > maxH) displayH = maxH;
-
     shell.style.width = "100%";
     shell.style.height = displayH + "px";
-    video.style.objectFit = displayH >= containerW * (vh / vw) - 1 ? "fill" : "cover";
     reportHeight();
   }
 
@@ -111,11 +173,11 @@
     if (!stream) return;
     stream.getTracks().forEach(function (track) { track.stop(); });
     stream = null;
-    video.srcObject = null;
+    if (video) video.srcObject = null;
   }
 
   async function startCamera() {
-    if (starting) return;
+    if (starting || isMobile) return;
     starting = true;
     stopStream();
     hint.textContent = "Starting camera…";
@@ -130,52 +192,54 @@
       });
       video.srcObject = stream;
       await video.play();
+      video.style.transform = "none";
       const track = stream.getVideoTracks()[0];
       const s = track.getSettings ? track.getSettings() : {};
-      const label = facingMode === "environment" ? "Rear camera" : "Front camera";
-      hint.textContent = label + ": " + (s.width || video.videoWidth) + "×" + (s.height || video.videoHeight);
+      hint.textContent = "Webcam: " + (s.width || video.videoWidth) + "×" + (s.height || video.videoHeight);
       layoutVideo();
     } catch (e) {
-      if (facingMode === "environment") {
-        facingMode = "user";
-        starting = false;
-        return startCamera();
-      }
-      hint.textContent = "Camera error: " + (e && e.message ? e.message : e)
-        + ". Allow camera access, then reload.";
+      hint.textContent = "Camera error: " + (e && e.message ? e.message : e);
     } finally {
       starting = false;
     }
   }
 
-  flip.addEventListener("click", function () {
-    facingMode = facingMode === "environment" ? "user" : "environment";
-    startCamera();
-  });
+  if (flip) {
+    flip.addEventListener("click", function () {
+      facingMode = facingMode === "user" ? "environment" : "user";
+      startCamera();
+    });
+  }
 
-  capture.addEventListener("click", function () {
-    if (!video.videoWidth) return;
-    const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
-    setValue(dataUrl);
-    hint.textContent = "Captured " + canvas.width + "×" + canvas.height + " — capture again to retake";
-  });
+  if (capture) {
+    capture.addEventListener("click", function () {
+      if (!video.videoWidth) return;
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext("2d").drawImage(video, 0, 0);
+      setValue(canvas.toDataURL("image/jpeg", 0.95));
+      hint.textContent = "Captured " + canvas.width + "×" + canvas.height;
+    });
+  }
 
   window.addEventListener("message", function (event) {
     if (event.data && event.data.type === "streamlit:render") {
-      const args = event.data.args || {};
-      if (args.default_facing === "user" || args.default_facing === "environment") {
-        facingMode = args.default_facing;
-      }
-      if (!stream && !starting) startCamera();
+      applyMode();
+      if (isMobile) openNativeCamera();
+      else if (!stream && !starting) startCamera();
+      else reportHeight();
     }
   });
 
-  video.addEventListener("loadedmetadata", layoutVideo);
-  window.addEventListener("resize", layoutVideo);
+  if (video) {
+    video.addEventListener("loadedmetadata", layoutVideo);
+  }
+  window.addEventListener("resize", function () {
+    if (!isMobile) layoutVideo();
+    else reportHeight();
+  });
+  applyMode();
   ready();
   reportHeight();
 </script>

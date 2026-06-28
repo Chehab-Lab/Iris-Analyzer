@@ -466,8 +466,46 @@ def inject_css() -> None:
             }
         }
 
+        .crop-actions-row {
+            display: flex;
+            gap: 10px;
+            margin: 12px 0 8px;
+        }
+        .crop-actions-row .crop-action {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.6rem 1rem;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-2);
+            background: var(--surface);
+            color: var(--text);
+            font-size: 14px;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            box-shadow: var(--shadow-xs);
+            font-family: inherit;
+        }
+        .crop-actions-row .crop-action.primary {
+            background: linear-gradient(180deg, #3b82f6 0%, var(--accent) 100%);
+            border-color: rgba(29, 78, 216, 0.35);
+            color: #fff;
+        }
+
         /* Hidden Streamlit buttons that back the HTML correction pads */
         .stApp:has(#correction-adj-hooks) [class*="st-key-adj_"] {
+            display: none !important;
+            height: 0 !important;
+            overflow: hidden !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: none !important;
+        }
+
+        /* Hidden Streamlit buttons that back the crop Apply / Reset controls */
+        .stApp:has(#crop-action-hooks) [class*="st-key-crop_"] {
             display: none !important;
             height: 0 !important;
             overflow: hidden !important;

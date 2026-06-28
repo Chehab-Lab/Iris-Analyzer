@@ -35,6 +35,10 @@ _camera_hires = components.declare_component(
     "camera_hires",
     path=str(Path(__file__).parent / "components" / "camera_hires"),
 )
+_take_photo = components.declare_component(
+    "take_photo",
+    path=str(Path(__file__).parent / "components" / "take_photo"),
+)
 
 
 def hires_camera(key: str = "camera") -> Optional[bytes]:
@@ -46,6 +50,20 @@ def hires_camera(key: str = "camera") -> Optional[bytes]:
         return base64.b64decode(data_url.split(",", 1)[1])
     except Exception:
         return None
+
+
+def _decode_data_url(data_url: str) -> Optional[bytes]:
+    if not data_url or "," not in data_url:
+        return None
+    try:
+        return base64.b64decode(data_url.split(",", 1)[1])
+    except Exception:
+        return None
+
+
+def take_photo_action(key: str = "take_photo") -> Optional[str]:
+    """Home-screen capture: OPEN_CAMERA on desktop, data URL on mobile."""
+    return _take_photo(key=key, default=None)
 
 
 @lru_cache(maxsize=2)
@@ -249,6 +267,273 @@ def _render_framed_image(image_bytes: bytes, *, sticky: bool = False) -> None:
     )
 
 
+_DEFAULT_CROP_RECT = {"left": 0.0, "top": 0.0, "right": 1.0, "bottom": 1.0}
+
+
+def _image_data_uri(image_bytes: bytes, *, max_side: int = 0) -> str:
+    """Return a base64 data URI; optionally downscale for faster in-browser display."""
+    if Image is not None and max_side > 0:
+        img = Image.open(io.BytesIO(image_bytes))
+        if img.mode not in ("RGB", "L"):
+            img = img.convert("RGB")
+        if max(img.size) > max_side:
+            img = img.copy()
+            img.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
+            buf = io.BytesIO()
+            fmt = "JPEG" if image_bytes[:3] == b"\xff\xd8\xff" else "PNG"
+            img.save(buf, format=fmt, quality=90)
+            image_bytes = buf.getvalue()
+    mime = "image/jpeg" if image_bytes[:3] == b"\xff\xd8\xff" else "image/png"
+    b64 = base64.b64encode(image_bytes).decode("ascii")
+    return f"data:{mime};base64,{b64}"
+
+
+def _apply_crop_bytes(image_bytes: bytes, rect: dict | None) -> bytes:
+    """Crop image using normalized edge fractions (0–1 from each side)."""
+    if Image is None or not rect:
+        return image_bytes
+    img = Image.open(io.BytesIO(image_bytes))
+    if img.mode not in ("RGB", "L"):
+        img = img.convert("RGB")
+    w, h = img.size
+    x0 = int(_clamp(float(rect.get("left", 0)), 0.0, 1.0) * w)
+    y0 = int(_clamp(float(rect.get("top", 0)), 0.0, 1.0) * h)
+    x1 = int(_clamp(float(rect.get("right", 1)), 0.0, 1.0) * w)
+    y1 = int(_clamp(float(rect.get("bottom", 1)), 0.0, 1.0) * h)
+    x0 = min(x0, w - 2)
+    y0 = min(y0, h - 2)
+    x1 = max(x1, x0 + 2)
+    y1 = max(y1, y0 + 2)
+    if x0 <= 0 and y0 <= 0 and x1 >= w and y1 >= h:
+        return image_bytes
+    cropped = img.crop((x0, y0, x1, y1))
+    out = io.BytesIO()
+    fmt = "JPEG" if image_bytes[:3] == b"\xff\xd8\xff" else "PNG"
+    cropped.save(out, format=fmt, quality=92)
+    return out.getvalue()
+
+
+def _sync_crop_state(image_bytes: bytes) -> dict:
+    """Reset crop rect when the source image changes."""
+    sig = hash(image_bytes)
+    if st.session_state.get("crop_src_sig") != sig:
+        st.session_state["crop_src_sig"] = sig
+        st.session_state["crop_rect"] = dict(_DEFAULT_CROP_RECT)
+    return st.session_state.setdefault("crop_rect", dict(_DEFAULT_CROP_RECT))
+
+
+def _render_crop_editor(data_uri: str, crop_rect: dict) -> None:
+    """Cropper.js iframe — posts crop rect to the main page on every drag."""
+    cl = crop_rect.get("left", 0.0)
+    ct = crop_rect.get("top", 0.0)
+    cr = crop_rect.get("right", 1.0)
+    cb = crop_rect.get("bottom", 1.0)
+
+    crop_html = f"""
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="UTF-8" />
+          <link rel="stylesheet"
+                href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css" />
+          <style>
+            * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+            html, body {{ background: #e8ecf4; }}
+            .crop-wrap {{
+              max-height: 420px;
+              background: #dde3ee;
+              border-radius: 12px;
+              overflow: hidden;
+            }}
+            .crop-wrap img {{ display: block; max-width: 100%; }}
+            .cropper-view-box {{ outline: 2px solid #2563eb; }}
+            .cropper-point {{ background: #2563eb; width: 10px; height: 10px; }}
+            .cropper-line {{ background: #2563eb; }}
+          </style>
+        </head>
+        <body>
+          <div class="crop-wrap">
+            <img id="crop-source" alt="Crop preview" />
+          </div>
+          <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
+          <script>
+            (function () {{
+              const INIT = {{ left: {cl}, top: {ct}, right: {cr}, bottom: {cb} }};
+              const DATA_URI = {repr(data_uri)};
+              const img = document.getElementById("crop-source");
+              let cropper = null;
+              let started = false;
+
+              function publish() {{
+                if (!cropper) return;
+                const id = cropper.getImageData();
+                const d = cropper.getData(true);
+                const nw = id.naturalWidth || 1;
+                const nh = id.naturalHeight || 1;
+                window.parent.postMessage({{
+                  type: "iris-crop",
+                  rect: {{
+                    left: d.x / nw,
+                    top: d.y / nh,
+                    right: (d.x + d.width) / nw,
+                    bottom: (d.y + d.height) / nh,
+                  }},
+                }}, "*");
+              }}
+
+              function startCropper() {{
+                if (cropper) {{ cropper.destroy(); cropper = null; }}
+                cropper = new Cropper(img, {{
+                  viewMode: 1,
+                  dragMode: "crop",
+                  autoCropArea: 0.92,
+                  responsive: true,
+                  background: false,
+                  movable: true,
+                  zoomable: false,
+                  scalable: false,
+                  rotatable: false,
+                  ready: function () {{
+                    const id = cropper.getImageData();
+                    const nw = id.naturalWidth || 1;
+                    const nh = id.naturalHeight || 1;
+                    cropper.setData({{
+                      x: INIT.left * nw,
+                      y: INIT.top * nh,
+                      width: Math.max(1, (INIT.right - INIT.left) * nw),
+                      height: Math.max(1, (INIT.bottom - INIT.top) * nh),
+                    }});
+                    publish();
+                  }},
+                  cropend: publish,
+                }});
+              }}
+
+              function bootCropper() {{
+                if (started || img.naturalWidth <= 0) return;
+                started = true;
+                startCropper();
+              }}
+
+              img.onload = bootCropper;
+              img.src = DATA_URI;
+              if (img.complete) bootCropper();
+            }})();
+          </script>
+        </body>
+        </html>
+        """
+    st.iframe(crop_html, height=440)
+
+
+def _render_crop_hooks(image_bytes: bytes, eye_side: str, model: str) -> None:
+    """Hidden Streamlit buttons — the HTML crop bridge clicks these."""
+    st.markdown('<div id="crop-action-hooks"></div>', unsafe_allow_html=True)
+    st.button(
+        "apply",
+        key="crop_apply_hook",
+        on_click=_on_crop_apply,
+        args=(image_bytes, eye_side, model),
+    )
+    st.button("reset", key="crop_reset_hook", on_click=_on_crop_reset)
+
+
+def _render_crop_actions(crop_rect: dict) -> None:
+    """Apply / Reset on the main page — triggers hidden Streamlit buttons."""
+    cl = crop_rect.get("left", 0.0)
+    ct = crop_rect.get("top", 0.0)
+    cr = crop_rect.get("right", 1.0)
+    cb = crop_rect.get("bottom", 1.0)
+
+    st.html(
+        f"""
+        <div class="crop-actions-row">
+          <button type="button" class="crop-action primary" id="iris-crop-apply">Apply crop</button>
+          <button type="button" class="crop-action" id="iris-crop-reset">Reset</button>
+        </div>
+        <script>
+        (function () {{
+          if (window.__irisCropBridge) return;
+          window.__irisCropBridge = true;
+
+          window.__irisCrop = {{
+            left: {cl}, top: {ct}, right: {cr}, bottom: {cb}
+          }};
+
+          function syncCropToUrl(rect) {{
+            window.__irisCrop = rect;
+            const u = new URL(window.location.href);
+            u.searchParams.set("view", "crop");
+            u.searchParams.set("cl", (rect.left ?? 0).toFixed(6));
+            u.searchParams.set("ct", (rect.top ?? 0).toFixed(6));
+            u.searchParams.set("cr", (rect.right ?? 1).toFixed(6));
+            u.searchParams.set("cb", (rect.bottom ?? 1).toFixed(6));
+            history.replaceState({{}}, "", u.toString());
+          }}
+
+          function clickCropHook(key) {{
+            const root = document.querySelector('[class*="st-key-' + key + '"]');
+            const btn = root && root.querySelector("button");
+            if (btn) btn.click();
+          }}
+
+          window.addEventListener("message", function (e) {{
+            if (e.data && e.data.type === "iris-crop") {{
+              syncCropToUrl(e.data.rect);
+            }}
+          }});
+
+          document.getElementById("iris-crop-apply").addEventListener("click", function () {{
+            syncCropToUrl(window.__irisCrop || {{ left: {cl}, top: {ct}, right: {cr}, bottom: {cb} }});
+            setTimeout(function () {{ clickCropHook("crop_apply_hook"); }}, 100);
+          }});
+
+          document.getElementById("iris-crop-reset").addEventListener("click", function () {{
+            syncCropToUrl({{ left: 0, top: 0, right: 1, bottom: 1 }});
+            setTimeout(function () {{ clickCropHook("crop_reset_hook"); }}, 100);
+          }});
+        }})();
+        </script>
+        """,
+        unsafe_allow_javascript=True,
+    )
+
+
+def _crop_rect_from_query(default: dict) -> dict:
+    if not all(k in st.query_params for k in ("cl", "ct", "cr", "cb")):
+        return default
+    return {
+        "left": float(st.query_params.get("cl", 0)),
+        "top": float(st.query_params.get("ct", 0)),
+        "right": float(st.query_params.get("cr", 1)),
+        "bottom": float(st.query_params.get("cb", 1)),
+    }
+
+
+def _clear_crop_query_params() -> None:
+    for key in ("cl", "ct", "cr", "cb"):
+        if key in st.query_params:
+            del st.query_params[key]
+
+
+def _on_crop_apply(image_bytes: bytes, eye_side: str, model: str) -> None:
+    default = st.session_state.get("crop_rect", _DEFAULT_CROP_RECT)
+    rect = _crop_rect_from_query(default)
+    st.session_state["crop_rect"] = rect
+    preview = _apply_crop_bytes(image_bytes, rect)
+    st.session_state.pending_bytes = preview
+    st.session_state.img_sig = (hash(preview), eye_side, model)
+    st.session_state.pop("analysis_cache", None)
+    st.session_state.pop("crop_src_sig", None)
+    _clear_crop_query_params()
+    _go_workflow("preview")
+
+
+def _on_crop_reset() -> None:
+    st.session_state["crop_rect"] = dict(_DEFAULT_CROP_RECT)
+    _clear_crop_query_params()
+
+
 def _center_crop_bytes(image_bytes: bytes, margin_pct: int) -> bytes:
     """UI-only crop helper — trims edges before processing (like Android UCrop)."""
     if Image is None or margin_pct <= 0:
@@ -271,12 +556,14 @@ def _go_home() -> None:
     for key in (
         "pending_bytes", "pending_name", "pending_eye_side", "pending_model",
         "img_sig", "analysis_cache", "workflow", "adj_sig", "captured_image",
+        "crop_src_sig", "crop_rect",
     ):
         st.session_state.pop(key, None)
     for key in ("view", "adj", "reset", "cam"):
         if key in st.query_params:
             del st.query_params[key]
     st.session_state["uploader_key"] = st.session_state.get("uploader_key", 0) + 1
+    st.session_state["camera_key"] = st.session_state.get("camera_key", 0) + 1
 
 
 def _go_workflow(step: str) -> None:
@@ -354,22 +641,17 @@ def _render_preview_step(image_bytes: bytes) -> None:
 
 
 def _render_crop_step(image_bytes: bytes, eye_side: str, model: str) -> None:
-    """Step 1b — trim edges before returning to preview."""
+    """Step 1b — drag edges/corners to crop before returning to preview."""
     st.markdown("**Adjust Image Size**")
-    margin = st.slider("Crop amount", 0, 40, st.session_state.get("crop_margin", 0))
-    st.session_state["crop_margin"] = margin
-    if margin > 20:
-        st.warning("Heavy cropping can cut off the iris or pupil and cause analysis to fail.")
-    preview = _center_crop_bytes(image_bytes, margin)
-    _render_framed_image(preview)
+    st.caption("Drag any edge or corner to crop the image.")
 
-    if st.button("Apply crop", use_container_width=True, type="primary"):
-        st.session_state.pending_bytes = preview
-        st.session_state.img_sig = (hash(preview), eye_side, model)
-        st.session_state.pop("analysis_cache", None)
-        _go_workflow("preview")
-        st.rerun()
+    crop_rect = _sync_crop_state(image_bytes)
+    _render_crop_editor(_image_data_uri(image_bytes, max_side=1600), crop_rect)
+    _render_crop_hooks(image_bytes, eye_side, model)
+    _render_crop_actions(crop_rect)
+
     if st.button("Cancel", use_container_width=True):
+        st.session_state.pop("crop_src_sig", None)
         _go_workflow("preview")
         st.rerun()
 
@@ -525,7 +807,8 @@ def _collect_image(*, show_controls: bool = True) -> tuple[Optional[bytes], str,
         )
     with cam_col:
         st.markdown("<div style='height:1.75rem'></div>", unsafe_allow_html=True)
-        if st.button("Take an image", use_container_width=True, type="primary"):
+        action: Optional[str] = take_photo_action(key=f"take_{st.session_state['camera_key']}")
+        if action == "OPEN_CAMERA":
             st.session_state.pending_eye_side = eye_side
             st.session_state.pending_model = model
             st.session_state.pop("pending_bytes", None)
@@ -542,6 +825,12 @@ def _collect_image(*, show_controls: bool = True) -> tuple[Optional[bytes], str,
         image_bytes = up.getvalue()
         image_name = up.name
         st.session_state.pop("captured_image", None)
+    elif action and isinstance(action, str) and action.startswith("data:"):
+        captured = _decode_data_url(action)
+        if captured:
+            image_bytes = captured
+            image_name = "captured.jpg"
+            st.session_state.pop("captured_image", None)
 
     return image_bytes, image_name, eye_side, model
 
