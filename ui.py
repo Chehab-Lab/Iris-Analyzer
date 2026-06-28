@@ -195,18 +195,25 @@ def _render_correction_bridge() -> None:
         """
         <script>
         (function () {
-            if (window.__irisAdjBridge) return;
-            window.__irisAdjBridge = true;
-            function clickAdj(key) {
-                const root = document.querySelector('[class*="st-key-' + key + '"]');
-                const btn = root && root.querySelector("button");
-                if (btn) btn.click();
-            }
+            window.__irisAdjClick = function (key) {
+                const token = "st-key-" + key;
+                const roots = document.querySelectorAll(
+                    '[data-testid="stElementContainer"], [data-testid="element-container"], div[class*="st-key-"]'
+                );
+                for (const root of roots) {
+                    const cls = typeof root.className === "string" ? root.className : "";
+                    if (cls.indexOf(token) === -1) continue;
+                    const btn = root.querySelector("button");
+                    if (btn) { btn.click(); return; }
+                }
+            };
+            if (window.__irisAdjBound) return;
+            window.__irisAdjBound = true;
             document.addEventListener("click", function (e) {
                 const t = e.target.closest("#correction-ui a[data-adj]");
                 if (!t) return;
                 e.preventDefault();
-                clickAdj(t.getAttribute("data-adj"));
+                window.__irisAdjClick(t.getAttribute("data-adj"));
             }, true);
         })();
         </script>
@@ -223,6 +230,7 @@ def _render_android_correction(w: int, h: int, rmax: float) -> None:
     pup_cls = "sel-btn active" if target == "pupil" else "sel-btn"
     ir_cls = "sel-btn active" if target == "iris" else "sel-btn"
 
+    _render_correction_adj_hooks(wf, hf, rmax)
     st.markdown(
         f"""
         <div id="correction-ui" class="manual-correction-panel compact">
@@ -260,7 +268,6 @@ def _render_android_correction(w: int, h: int, rmax: float) -> None:
         """,
         unsafe_allow_html=True,
     )
-    _render_correction_adj_hooks(wf, hf, rmax)
     _render_correction_bridge()
 
 
@@ -790,38 +797,36 @@ def _collect_image(*, show_controls: bool = True) -> tuple[Optional[bytes], str,
         model = st.session_state.get("pending_model", "open-iris")
         return None, "", eye_side, model
 
-    eye_col, mdl_col, btn_col = st.columns([1, 1.5, 2])
+    eye_col, mdl_col, up_col, cam_col = st.columns([1, 1.5, 1, 1])
     with eye_col:
+        st.markdown(
+            '<div id="input-controls-row" aria-hidden="true"></div>',
+            unsafe_allow_html=True,
+        )
         eye_side = st.selectbox("Eye side", ["right", "left"], index=0)
     with mdl_col:
         model = _MODELS[st.selectbox("Model", list(_MODELS.keys()), index=0)]
-    with btn_col:
-        st.markdown(
-            '<div id="take-photo-anchor" class="input-btn-spacer"></div>',
-            unsafe_allow_html=True,
+    with up_col:
+        up = st.file_uploader(
+            "Upload an iris image",
+            type=["png", "jpg", "jpeg", "bmp", "tif", "tiff"],
+            accept_multiple_files=False,
+            label_visibility="collapsed",
+            key=f"uploader_{st.session_state['uploader_key']}",
         )
-        up_col, cam_col = st.columns(2, gap="small")
-        with up_col:
-            up = st.file_uploader(
-                "Upload an iris image",
-                type=["png", "jpg", "jpeg", "bmp", "tif", "tiff"],
-                accept_multiple_files=False,
-                label_visibility="collapsed",
-                key=f"uploader_{st.session_state['uploader_key']}",
-            )
-        with cam_col:
-            action: Optional[str] = take_photo_action(
-                key=f"take_{st.session_state['camera_key']}",
-            )
-            if action == "OPEN_CAMERA":
-                st.session_state.pending_eye_side = eye_side
-                st.session_state.pending_model = model
-                st.session_state.pop("pending_bytes", None)
-                st.session_state.pop("captured_image", None)
-                st.session_state["camera_key"] += 1
-                st.session_state["uploader_key"] += 1
-                _go_workflow("camera")
-                st.rerun()
+    with cam_col:
+        action: Optional[str] = take_photo_action(
+            key=f"take_{st.session_state['camera_key']}",
+        )
+        if action == "OPEN_CAMERA":
+            st.session_state.pending_eye_side = eye_side
+            st.session_state.pending_model = model
+            st.session_state.pop("pending_bytes", None)
+            st.session_state.pop("captured_image", None)
+            st.session_state["camera_key"] += 1
+            st.session_state["uploader_key"] += 1
+            _go_workflow("camera")
+            st.rerun()
 
     image_bytes: Optional[bytes] = None
     image_name = "captured.png"

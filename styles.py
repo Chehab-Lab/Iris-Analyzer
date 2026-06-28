@@ -78,42 +78,41 @@ def inject_css() -> None:
             width: 100% !important;
         }
 
-        /* Take photo + upload — same row, same height */
-        .input-btn-spacer {
-            height: 1.75rem; margin: 0; padding: 0;
-            line-height: 0; font-size: 0; overflow: hidden;
+        /* Home input row — align dropdowns and image buttons on one line */
+        #input-controls-row {
+            height: 0; margin: 0; padding: 0; overflow: hidden;
         }
-        .block-container:has(#take-photo-anchor) [data-testid="stHorizontalBlock"]:has([data-testid="stFileUploader"]) {
+        .block-container:has(#input-controls-row) [data-testid="stMarkdown"] {
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        .block-container:has(#input-controls-row) [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) {
+            align-items: flex-end !important;
+            gap: 0.75rem !important;
+        }
+        .block-container:has(#input-controls-row) [data-testid="column"] [data-testid="stVerticalBlock"] {
+            gap: 0.35rem !important;
+        }
+        .block-container:has(#input-controls-row) [data-testid="stSelectbox"] > div > div {
+            min-height: 42px !important;
+            display: flex !important;
             align-items: center !important;
-            gap: 0.5rem !important;
         }
-        .block-container:has(#take-photo-anchor) [data-testid="stHorizontalBlock"]:has([data-testid="stFileUploader"]) [data-testid="stVerticalBlock"] {
-            gap: 0 !important;
-            justify-content: flex-end !important;
-        }
-        .block-container:has(#take-photo-anchor) [data-testid="stHorizontalBlock"]:has([data-testid="stFileUploader"]) [data-testid="element-container"] {
-            margin: 0 !important;
-            padding: 0 !important;
-        }
-        .block-container:has(#take-photo-anchor) [data-testid="stMarkdown"] {
-            margin: 0 !important;
-            padding: 0 !important;
-        }
-        .block-container:has(#take-photo-anchor) [data-testid="stFileUploader"] {
+        .block-container:has(#input-controls-row) [data-testid="stFileUploader"] {
             margin: 0 !important;
         }
-        .block-container:has(#take-photo-anchor) [data-testid="stFileUploaderDropzone"] {
+        .block-container:has(#input-controls-row) [data-testid="stFileUploaderDropzone"] {
             box-sizing: border-box !important;
             height: 42px !important;
             min-height: 42px !important;
             max-height: 42px !important;
         }
-        .block-container:has(#take-photo-anchor) [data-testid="stCustomComponentV1"] {
+        .block-container:has(#input-controls-row) [data-testid="stCustomComponentV1"] {
             width: 100% !important;
             margin: 0 !important;
             padding: 0 !important;
         }
-        .block-container:has(#take-photo-anchor) iframe {
+        .block-container:has(#input-controls-row) iframe {
             width: 100% !important;
             height: 42px !important;
             min-height: 42px !important;
@@ -122,6 +121,9 @@ def inject_css() -> None:
             padding: 0 !important;
             display: block !important;
             border: none !important;
+        }
+        .block-container:has(#input-controls-row) [data-testid="element-container"] {
+            margin-bottom: 0 !important;
         }
 
         /* ---- Top nav bar ---- */
@@ -542,12 +544,24 @@ def inject_css() -> None:
 
         /* Hidden Streamlit buttons that back the HTML correction pads */
         .stApp:has(#correction-adj-hooks) [class*="st-key-adj_"] {
-            display: none !important;
-            height: 0 !important;
+            position: absolute !important;
+            left: -10000px !important;
+            top: auto !important;
+            width: 1px !important;
+            height: 1px !important;
+            opacity: 0 !important;
             overflow: hidden !important;
             margin: 0 !important;
             padding: 0 !important;
             border: none !important;
+            z-index: -1 !important;
+        }
+        .stApp:has(#correction-adj-hooks) [class*="st-key-adj_"] button {
+            width: 1px !important;
+            height: 1px !important;
+            min-height: 0 !important;
+            padding: 0 !important;
+            margin: 0 !important;
         }
 
         /* Hidden Streamlit buttons that back the crop Apply / Reset controls */
