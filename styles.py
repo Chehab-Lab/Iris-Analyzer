@@ -126,6 +126,14 @@ def inject_css() -> None:
             margin-bottom: 0 !important;
         }
 
+        .block-container:has(#correction-overlay-anchor) iframe {
+            width: 100% !important;
+            border: none !important;
+        }
+        .block-container:has(#correction-overlay-anchor) [data-testid="stCustomComponentV1"] {
+            width: 100% !important;
+        }
+
         /* ---- Top nav bar ---- */
         .iris-nav {
             position: fixed; top: 0; left: 0; right: 0; z-index: 999;

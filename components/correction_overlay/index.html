@@ -1,0 +1,270 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --accent: #2563eb;
+    --text: #1f2937;
+    --text-muted: #64748b;
+    --border: #e5e7eb;
+    --border-2: #d1d5db;
+    --surface-soft: #f8fafc;
+  }
+  html, body { margin: 0; padding: 0; background: #e8ecf4; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text);
+  }
+  .wrap { padding: 0 0 8px; }
+  .preview-frame {
+    background: #dde3ee;
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 8px;
+    line-height: 0;
+  }
+  .preview-frame svg { display: block; width: 100%; height: auto; }
+  .ocu-ipr {
+    text-align: center;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--accent);
+    margin: 0 0 8px;
+  }
+  .manual-correction-panel {
+    background: #fff;
+    padding: 10px 12px;
+    margin: 4px 0 8px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  }
+  .manual-correction-panel h4 {
+    text-align: center;
+    font-size: 0.68rem; font-weight: 700;
+    margin: 0 0 8px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .correction-select { display: flex; gap: 6px; margin-bottom: 10px; }
+  .sel-btn {
+    flex: 1; display: block; text-align: center;
+    padding: 0.35rem 0.4rem;
+    border-radius: 10px;
+    border: 1px solid var(--border-2);
+    background: var(--surface-soft);
+    color: var(--text-muted);
+    font-size: 11px; font-weight: 600;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  .sel-btn.active {
+    background: linear-gradient(180deg, #3b82f6 0%, var(--accent) 100%);
+    border-color: rgba(29, 78, 216, 0.4);
+    color: #fff;
+  }
+  .correction-pads-row { display: flex; gap: 10px; }
+  .correction-pad { flex: 1; min-width: 0; }
+  .pad-label {
+    text-align: center; font-size: 0.6rem; font-weight: 600;
+    color: var(--text-muted); margin-bottom: 6px;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .dpad-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+  .dpad-gap { display: block; min-height: 1px; }
+  .pad-btn {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 36px;
+    background: linear-gradient(180deg, #fff 0%, var(--surface-soft) 100%);
+    color: var(--accent);
+    border: 1px solid var(--border-2);
+    border-radius: 9px;
+    font-size: 0.9rem; font-weight: 600;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    user-select: none;
+  }
+  .pad-btn:active { transform: scale(0.96); opacity: 0.9; }
+  .fine-btns { display: flex; flex-direction: column; gap: 5px; }
+  .fine-btn { min-height: 40px; padding: 6px 2px; }
+  .fine-btn svg { display: block; margin: 0 auto; }
+  .corr-actions { display: flex; flex-direction: column; gap: 8px; }
+  .corr-actions button {
+    width: 100%; font: inherit; font-weight: 600; font-size: 0.95rem;
+    border-radius: 10px; padding: 0.65rem 1rem; cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .corr-actions .sec {
+    background: #fff; color: var(--text);
+    border: 1px solid var(--border-2);
+  }
+  .corr-actions .primary {
+    background: linear-gradient(180deg, #3b82f6 0%, var(--accent) 100%);
+    color: #fff; border: 1px solid rgba(29, 78, 216, 0.35);
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="preview-frame">
+    <svg id="corr-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+  </div>
+  <div class="ocu-ipr" id="corr-ipr">IPR: —</div>
+  <div class="manual-correction-panel">
+    <h4>Manual Correction</h4>
+    <div class="correction-select">
+      <button type="button" class="sel-btn active" data-target="pupil">Pupil</button>
+      <button type="button" class="sel-btn" data-target="iris">Iris</button>
+    </div>
+    <div class="correction-pads-row">
+      <div class="correction-pad">
+        <div class="pad-label">Move center</div>
+        <div class="dpad-grid">
+          <span class="dpad-gap"></span>
+          <button type="button" class="pad-btn" data-act="up">▲</button>
+          <span class="dpad-gap"></span>
+          <button type="button" class="pad-btn" data-act="left">◀</button>
+          <span class="dpad-gap"></span>
+          <button type="button" class="pad-btn" data-act="right">▶</button>
+          <span class="dpad-gap"></span>
+          <button type="button" class="pad-btn" data-act="down">▼</button>
+          <span class="dpad-gap"></span>
+        </div>
+      </div>
+      <div class="correction-pad">
+        <div class="pad-label">Adjust size</div>
+        <div class="fine-btns">
+          <button type="button" class="pad-btn fine-btn" data-act="out" aria-label="Enlarge">
+            <svg viewBox="0 0 24 24" width="22" height="22"><polygon points="12,2 10,6 14,6" fill="currentColor"/><polygon points="12,22 10,18 14,18" fill="currentColor"/><polygon points="2,12 6,10 6,14" fill="currentColor"/><polygon points="22,12 18,10 18,14" fill="currentColor"/></svg>
+          </button>
+          <button type="button" class="pad-btn fine-btn" data-act="in" aria-label="Shrink">
+            <svg viewBox="0 0 24 24" width="22" height="22"><polygon points="12,8 10,4 14,4" fill="currentColor"/><polygon points="12,16 10,20 14,20" fill="currentColor"/><polygon points="8,12 4,10 4,14" fill="currentColor"/><polygon points="16,12 20,10 20,14" fill="currentColor"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="corr-actions">
+    <button type="button" class="sec" id="corr-reset">Correct Ratio</button>
+    <button type="button" class="primary" id="corr-done">Done</button>
+  </div>
+</div>
+<script>
+  function _send(type, data) {
+    window.parent.postMessage(Object.assign({ isStreamlitMessage: true, type: type }, data), "*");
+  }
+  function ready()      { _send("streamlit:componentReady", { apiVersion: 1 }); }
+  function setHeight(h) { _send("streamlit:setFrameHeight", { height: h }); }
+  function setValue(v)  { _send("streamlit:setComponentValue", { value: v, dataType: "json" }); }
+
+  const svg = document.getElementById("corr-svg");
+  const iprEl = document.getElementById("corr-ipr");
+  let cfg = { w: 1, h: 1, rmax: 1, baseUri: "" };
+  let init = {};
+  let state = {};
+  let target = "pupil";
+
+  function clamp(v, lo, hi) { return Math.min(Math.max(v, lo), hi); }
+
+  function loadState(s) {
+    state = {
+      pcx: s.pcx, pcy: s.pcy, pr: s.pr,
+      icx: s.icx, icy: s.icy, ir: s.ir,
+    };
+  }
+
+  function ipr() {
+    return state.pr > 0 ? state.ir / state.pr : 0;
+  }
+
+  function draw() {
+    const w = cfg.w;
+    const h = cfg.h;
+    svg.setAttribute("viewBox", "0 0 " + w + " " + h);
+    svg.innerHTML =
+      '<image href="' + cfg.baseUri + '" x="0" y="0" width="' + w + '" height="' + h + '" preserveAspectRatio="xMidYMid meet" />' +
+      '<circle cx="' + state.pcx + '" cy="' + state.pcy + '" r="' + state.pr + '" fill="none" stroke="#16a34a" stroke-width="' + Math.max(1, Math.round(Math.max(w,h)/300)) + '" />' +
+      '<circle cx="' + state.icx + '" cy="' + state.icy + '" r="' + state.ir + '" fill="none" stroke="#2563eb" stroke-width="' + Math.max(1, Math.round(Math.max(w,h)/300)) + '" />' +
+      '<circle cx="' + state.icx + '" cy="' + state.icy + '" r="' + Math.max(2, Math.round(Math.max(w,h)/110)) + '" fill="#7c3aed" />' +
+      '<circle cx="' + state.pcx + '" cy="' + state.pcy + '" r="' + Math.max(2, Math.round(Math.max(w,h)/110)) + '" fill="#dc2626" />';
+    iprEl.textContent = "IPR: " + ipr().toFixed(3);
+  }
+
+  function setTarget(t) {
+    target = t;
+    document.querySelectorAll(".sel-btn").forEach(function (btn) {
+      btn.classList.toggle("active", btn.getAttribute("data-target") === t);
+    });
+  }
+
+  function applyAction(act) {
+    const step = 2;
+    const rstep = 1;
+    if (act === "up" || act === "down" || act === "left" || act === "right") {
+      const cx = target === "pupil" ? "pcx" : "icx";
+      const cy = target === "pupil" ? "pcy" : "icy";
+      if (act === "up")   state[cy] = clamp(state[cy] - step, 0, cfg.h);
+      if (act === "down") state[cy] = clamp(state[cy] + step, 0, cfg.h);
+      if (act === "left") state[cx] = clamp(state[cx] - step, 0, cfg.w);
+      if (act === "right")state[cx] = clamp(state[cx] + step, 0, cfg.w);
+    } else if (act === "out" || act === "in") {
+      const rk = target === "pupil" ? "pr" : "ir";
+      state[rk] = clamp(state[rk] + (act === "out" ? rstep : -rstep), 1, cfg.rmax);
+    }
+    draw();
+  }
+
+  function resetToInit() {
+    loadState(init);
+    draw();
+  }
+
+  document.querySelectorAll(".sel-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () { setTarget(btn.getAttribute("data-target")); });
+  });
+  document.querySelectorAll(".pad-btn[data-act]").forEach(function (btn) {
+    btn.addEventListener("click", function () { applyAction(btn.getAttribute("data-act")); });
+  });
+  document.getElementById("corr-reset").addEventListener("click", resetToInit);
+  document.getElementById("corr-done").addEventListener("click", function () {
+    setValue({
+      done: true,
+      pcx: state.pcx, pcy: state.pcy, pr: state.pr,
+      icx: state.icx, icy: state.icy, ir: state.ir,
+      ipr: ipr(),
+    });
+  });
+
+  window.addEventListener("message", function (event) {
+    if (!event.data || event.data.type !== "streamlit:render") return;
+    const a = event.data.args || {};
+    cfg = {
+      w: a.width || 1,
+      h: a.height || 1,
+      rmax: a.rmax || 1,
+      baseUri: a.base_uri || "",
+    };
+    init = {
+      pcx: a.init_pcx, pcy: a.init_pcy, pr: a.init_pr,
+      icx: a.init_icx, icy: a.init_icy, ir: a.init_ir,
+    };
+    loadState({
+      pcx: a.pcx, pcy: a.pcy, pr: a.pr,
+      icx: a.icx, icy: a.icy, ir: a.ir,
+    });
+    setTarget(a.target || "pupil");
+    draw();
+    setHeight(document.body.scrollHeight + 6);
+  });
+
+  ready();
+  setHeight(480);
+</script>
+</body>
+</html>

@@ -44,6 +44,10 @@ _crop_action = components.declare_component(
     "crop_action",
     path=str(Path(__file__).parent / "components" / "crop_action"),
 )
+_correction_overlay = components.declare_component(
+    "correction_overlay",
+    path=str(Path(__file__).parent / "components" / "correction_overlay"),
+)
 
 
 def hires_camera(key: str = "camera") -> Optional[bytes]:
@@ -74,6 +78,51 @@ def take_photo_action(key: str = "take_photo") -> Optional[str]:
 def crop_action(key: str, default_rect: dict) -> Optional[dict]:
     """Apply / Reset crop controls; returns {action, rect?} when clicked."""
     return _crop_action(key=key, default=None, default_rect=default_rect)
+
+
+def correction_overlay(
+    key: str,
+    *,
+    base_uri: str,
+    width: int,
+    height: int,
+    rmax: float,
+    pcx: float,
+    pcy: float,
+    pr: float,
+    icx: float,
+    icy: float,
+    ir: float,
+    init_pcx: float,
+    init_pcy: float,
+    init_pr: float,
+    init_icx: float,
+    init_icy: float,
+    init_ir: float,
+    target: str = "pupil",
+) -> Optional[dict]:
+    """Interactive correction UI — instant client-side pad updates."""
+    return _correction_overlay(
+        key=key,
+        default=None,
+        base_uri=base_uri,
+        width=width,
+        height=height,
+        rmax=rmax,
+        pcx=pcx,
+        pcy=pcy,
+        pr=pr,
+        icx=icx,
+        icy=icy,
+        ir=ir,
+        init_pcx=init_pcx,
+        init_pcy=init_pcy,
+        init_pr=init_pr,
+        init_icx=init_icx,
+        init_icy=init_icy,
+        init_ir=init_ir,
+        target=target,
+    )
 
 
 @lru_cache(maxsize=2)
@@ -699,86 +748,108 @@ def render_result(r: IrisResult, eye_side: str, *, correction: bool = False) -> 
     # Streamlit's ForwardMsg cache, and constant dimensions keep the layout still.
     overlay = analysis.draw_circles_png(r.original_png, (pcx, pcy), pr, (icx, icy), ir)
 
-    screen_cls = "work-screen correction-mode" if correction else "work-screen"
-    st.markdown(f'<div class="{screen_cls}">', unsafe_allow_html=True)
-    _render_framed_image(overlay, sticky=correction)
-    ipr_cls = "ocu-ipr compact" if correction else "ocu-ipr"
-    st.markdown(
-        f'<div class="{ipr_cls}">IPR: {ipr:.3f}</div>',
-        unsafe_allow_html=True,
-    )
-
     if correction:
-        _render_android_correction(w, h, rmax)
-        st.markdown("</div>", unsafe_allow_html=True)
-        if st.button("Correct Ratio", use_container_width=True):
-            st.session_state["adj_sig"] = None
-            st.rerun()
-        if st.button("Done", use_container_width=True, type="primary"):
+        st.markdown('<div id="correction-overlay-anchor"></div>', unsafe_allow_html=True)
+        base_uri = _image_data_uri(r.original_png, max_side=1200)
+        out = correction_overlay(
+            key=f"corr_{st.session_state.get('adj_sig', sig)}",
+            base_uri=base_uri,
+            width=w,
+            height=h,
+            rmax=rmax,
+            pcx=pcx,
+            pcy=pcy,
+            pr=pr,
+            icx=icx,
+            icy=icy,
+            ir=ir,
+            init_pcx=float(r.pupil_center[0]),
+            init_pcy=float(r.pupil_center[1]),
+            init_pr=float(r.pupil_radius),
+            init_icx=float(r.iris_center[0]),
+            init_icy=float(r.iris_center[1]),
+            init_ir=float(r.iris_radius),
+            target=st.session_state.get("adj_target", "pupil"),
+        )
+        if out and out.get("done"):
+            st.session_state["adj_pcx"] = float(out["pcx"])
+            st.session_state["adj_pcy"] = float(out["pcy"])
+            st.session_state["adj_pr"] = float(out["pr"])
+            st.session_state["adj_icx"] = float(out["icx"])
+            st.session_state["adj_icy"] = float(out["icy"])
+            st.session_state["adj_ir"] = float(out["ir"])
+            st.session_state["adj_target"] = st.session_state.get("adj_target", "pupil")
             _go_workflow("result")
             st.rerun()
-    else:
-        st.markdown("</div>", unsafe_allow_html=True)
-        if st.button("Correct Ratio", use_container_width=True):
-            _go_workflow("correction")
-            st.rerun()
-        if st.button("Retry", use_container_width=True):
-            _go_workflow("preview")
-            st.session_state.pop("analysis_cache", None)
-            st.session_state.pop("captured_image", None)
-            st.session_state["uploader_key"] = st.session_state.get("uploader_key", 0) + 1
-            st.rerun()
+        return
 
-        with st.expander("Measurement details", expanded=False):
-            st.markdown(
-                f"""
-                <div class="metric-panel">
-                    <div class="metric-row">
-                        <div class="metric hl"><div class="label">IPR</div>
-                            <div class="value">{ipr:.4f}</div></div>
-                        <div class="metric"><div class="label">Eye side</div>
-                            <div class="value text">{eye_side.title()}</div></div>
-                        <div class="metric"><div class="label">Iris radius</div>
-                            <div class="value">{ir:.1f}<span class="unit"> px</span></div></div>
-                        <div class="metric"><div class="label">Pupil radius</div>
-                            <div class="value">{pr:.1f}<span class="unit"> px</span></div></div>
-                    </div>
-                    <div class="metric-row">
-                        <div class="metric"><div class="label">Iris center</div>
-                            <div class="value coords">{icx:.0f}, {icy:.0f}</div></div>
-                        <div class="metric"><div class="label">Pupil center</div>
-                            <div class="value coords">{pcx:.0f}, {pcy:.0f}</div></div>
-                    </div>
+    st.markdown('<div class="work-screen">', unsafe_allow_html=True)
+    _render_framed_image(overlay, sticky=False)
+    st.markdown(
+        f'<div class="ocu-ipr">IPR: {ipr:.3f}</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown("</div>", unsafe_allow_html=True)
+    if st.button("Correct Ratio", use_container_width=True):
+        _go_workflow("correction")
+        st.rerun()
+    if st.button("Retry", use_container_width=True):
+        _go_workflow("preview")
+        st.session_state.pop("analysis_cache", None)
+        st.session_state.pop("captured_image", None)
+        st.session_state["uploader_key"] = st.session_state.get("uploader_key", 0) + 1
+        st.rerun()
+
+    with st.expander("Measurement details", expanded=False):
+        st.markdown(
+            f"""
+            <div class="metric-panel">
+                <div class="metric-row">
+                    <div class="metric hl"><div class="label">IPR</div>
+                        <div class="value">{ipr:.4f}</div></div>
+                    <div class="metric"><div class="label">Eye side</div>
+                        <div class="value text">{eye_side.title()}</div></div>
+                    <div class="metric"><div class="label">Iris radius</div>
+                        <div class="value">{ir:.1f}<span class="unit"> px</span></div></div>
+                    <div class="metric"><div class="label">Pupil radius</div>
+                        <div class="value">{pr:.1f}<span class="unit"> px</span></div></div>
                 </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        csv = (
-            "image,eye_side,ipr,pupil_x,pupil_y,pupil_radius,"
-            "iris_x,iris_y,iris_radius,width,height\n"
-            f"{r.name},{eye_side},{ipr:.5f},{pcx:.3f},{pcy:.3f},{pr:.3f},"
-            f"{icx:.3f},{icy:.3f},{ir:.3f},{w},{h}\n"
+                <div class="metric-row">
+                    <div class="metric"><div class="label">Iris center</div>
+                        <div class="value coords">{icx:.0f}, {icy:.0f}</div></div>
+                    <div class="metric"><div class="label">Pupil center</div>
+                        <div class="value coords">{pcx:.0f}, {pcy:.0f}</div></div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
-        st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
-        dl1, dl2 = st.columns(2)
-        with dl1:
-            st.download_button(
-                "Download overlay (PNG)",
-                data=overlay,
-                file_name=f"iris_overlay_{stamp}.png",
-                mime="image/png",
-                use_container_width=True,
-            )
-        with dl2:
-            st.download_button(
-                "Download measurements (CSV)",
-                data=csv.encode("utf-8"),
-                file_name=f"iris_result_{stamp}.csv",
-                mime="text/csv",
-                use_container_width=True,
-            )
+
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    csv = (
+        "image,eye_side,ipr,pupil_x,pupil_y,pupil_radius,"
+        "iris_x,iris_y,iris_radius,width,height\n"
+        f"{r.name},{eye_side},{ipr:.5f},{pcx:.3f},{pcy:.3f},{pr:.3f},"
+        f"{icx:.3f},{icy:.3f},{ir:.3f},{w},{h}\n"
+    )
+    st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
+    dl1, dl2 = st.columns(2)
+    with dl1:
+        st.download_button(
+            "Download overlay (PNG)",
+            data=overlay,
+            file_name=f"iris_overlay_{stamp}.png",
+            mime="image/png",
+            use_container_width=True,
+        )
+    with dl2:
+        st.download_button(
+            "Download measurements (CSV)",
+            data=csv.encode("utf-8"),
+            file_name=f"iris_result_{stamp}.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
 
 
 _MODELS = {
