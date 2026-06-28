@@ -10,7 +10,13 @@
     color: #1f2937;
     background: #e8ecf4;
   }
-  .wrap { display: flex; flex-direction: column; gap: 12px; padding: 4px 0 8px; }
+  .wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 4px 0 8px;
+    min-height: 100%;
+  }
   .video-shell {
     position: relative;
     width: 100%;
@@ -18,12 +24,15 @@
     border-radius: 12px;
     overflow: hidden;
     border: 1px solid rgba(15, 23, 42, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
   video {
     display: block;
     width: 100%;
     max-height: min(72vh, 640px);
-    object-fit: cover;
+    object-fit: contain;
     background: #000;
   }
   .row {
@@ -51,6 +60,36 @@
   }
   button.sec:hover { background: #f7f8fa; }
   .hint { font-size: 0.82rem; color: #64748b; flex: 1; min-width: 180px; }
+
+  @media (max-width: 768px), (pointer: coarse) {
+    body { background: #000; }
+    .wrap {
+      gap: 10px;
+      padding: 0;
+      min-height: calc(100vh - 8px);
+    }
+    .video-shell {
+      flex: 1;
+      min-height: calc(100vh - 120px);
+      border-radius: 0;
+      border: none;
+    }
+    video {
+      width: 100%;
+      height: calc(100vh - 120px);
+      max-height: none;
+    }
+    .row {
+      padding: 0 10px 10px;
+      background: #111827;
+    }
+    button.sec {
+      background: #1f2937;
+      color: #f9fafb;
+      border-color: #374151;
+    }
+    .hint { color: #9ca3af; }
+  }
 </style>
 </head>
 <body>
@@ -86,7 +125,10 @@
   let starting = false;
 
   function reportHeight() {
-    setHeight(document.body.scrollHeight + 12);
+    const h = isMobile
+      ? Math.max(window.innerHeight - 64, document.body.scrollHeight + 12)
+      : document.body.scrollHeight + 12;
+    setHeight(Math.max(h, 480));
   }
 
   function stopStream() {
@@ -96,21 +138,25 @@
     video.srcObject = null;
   }
 
+  function videoConstraints() {
+    const base = {
+      facingMode: { ideal: facingMode },
+      width:  { ideal: isMobile ? 1920 : 4096 },
+      height: { ideal: isMobile ? 1920 : 2160 },
+    };
+    if (isMobile) {
+      base.aspectRatio = { ideal: 1.0 };
+    }
+    return { audio: false, video: base };
+  }
+
   async function startCamera() {
     if (starting) return;
     starting = true;
     stopStream();
     hint.textContent = "Starting camera…";
     try {
-      const constraints = {
-        audio: false,
-        video: {
-          facingMode: { ideal: facingMode },
-          width:  { ideal: 4096 },
-          height: { ideal: 2160 },
-        },
-      };
-      stream = await navigator.mediaDevices.getUserMedia(constraints);
+      stream = await navigator.mediaDevices.getUserMedia(videoConstraints());
       video.srcObject = stream;
       await video.play();
       const track = stream.getVideoTracks()[0];
@@ -131,6 +177,22 @@
     reportHeight();
   }
 
+  function captureCropRect(vw, vh) {
+    if (!isMobile) {
+      return { sx: 0, sy: 0, sw: vw, sh: vh };
+    }
+    const ratio = vw / vh;
+    if (ratio > 1.15) {
+      const size = vh;
+      return { sx: Math.floor((vw - size) / 2), sy: 0, sw: size, sh: size };
+    }
+    if (ratio < 0.85) {
+      const size = vw;
+      return { sx: 0, sy: Math.floor((vh - size) / 2), sw: size, sh: size };
+    }
+    return { sx: 0, sy: 0, sw: vw, sh: vh };
+  }
+
   flip.addEventListener("click", function () {
     facingMode = facingMode === "environment" ? "user" : "environment";
     startCamera();
@@ -138,10 +200,15 @@
 
   capture.addEventListener("click", function () {
     if (!video.videoWidth) return;
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    const rect = captureCropRect(vw, vh);
     const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.width = rect.sw;
+    canvas.height = rect.sh;
+    canvas.getContext("2d").drawImage(
+      video, rect.sx, rect.sy, rect.sw, rect.sh, 0, 0, rect.sw, rect.sh
+    );
     const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
     setValue(dataUrl);
     hint.textContent = "Captured " + canvas.width + "×" + canvas.height + " — capture again to retake";

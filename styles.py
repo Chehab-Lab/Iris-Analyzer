@@ -73,6 +73,28 @@ def inject_css() -> None:
         .block-container:has(.work-screen) {padding-bottom: 0.75rem;}
         .block-container:has(.work-screen) .iris-footer {margin-top: 20px;}
 
+        /* Camera page — use most of the viewport on phones */
+        .block-container:has(#camera-screen-anchor) {
+            max-width: 100%;
+            padding-left: 0.75rem;
+            padding-right: 0.75rem;
+        }
+        .block-container:has(#camera-screen-anchor) iframe {
+            width: 100% !important;
+            min-height: 70vh !important;
+            border: none !important;
+        }
+        @media (max-width: 768px) {
+            .block-container:has(#camera-screen-anchor) {
+                padding-top: 4.4rem;
+                padding-left: 0;
+                padding-right: 0;
+            }
+            .block-container:has(#camera-screen-anchor) iframe {
+                min-height: calc(100vh - 88px) !important;
+            }
+        }
+
         /* ---- Top nav bar ---- */
         .iris-nav {
             position: fixed; top: 0; left: 0; right: 0; z-index: 999;

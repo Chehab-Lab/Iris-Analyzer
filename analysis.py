@@ -322,6 +322,22 @@ def draw_circles_png(base_png_bytes, pupil_xy, pupil_radius,
     return enc.tobytes() if ok else base_png_bytes
 
 
+def _friendly_pipeline_hint(detail: str) -> str:
+    """Turn raw open-iris errors into actionable guidance."""
+    text = detail or ""
+    if "VectorizationError" in text or "Number of contours" in text:
+        return (
+            "The model could not find a single clear iris boundary. "
+            "Try a less aggressive crop, recapture closer to the eye, or verify the eye-side setting."
+        )
+    if text:
+        return text
+    return (
+        "The image may not be a clear iris photo, the eye side may be wrong, "
+        "or the eye is too off-center / low-resolution."
+    )
+
+
 def _pipeline_error_reason(output, pipeline) -> str:
     """Extract the real reason open-iris rejected an image.
 
@@ -340,21 +356,20 @@ def _pipeline_error_reason(output, pipeline) -> str:
         msg = err.get("message") or ""
         text = f"{etype}: {msg}".strip(": ").strip()
         if text:
-            return text
+            return _friendly_pipeline_hint(text)
     elif err:
-        return str(err)
+        return _friendly_pipeline_hint(str(err))
 
     # 2) the call-trace error object
     try:
         getter = getattr(pipeline.call_trace, "get_error", None)
         tb_err = getter() if getter else None
         if tb_err is not None:
-            return f"{type(tb_err).__name__}: {tb_err}"
+            return _friendly_pipeline_hint(f"{type(tb_err).__name__}: {tb_err}")
     except Exception:
         pass
 
-    return ("The image may not be a clear near-infrared iris, the eye side may be "
-            "wrong, or the eye is too off-center / low-resolution.")
+    return _friendly_pipeline_hint("")
 
 
 def _run_iris_pipeline(pipeline, img_pixels, eye_side: str):

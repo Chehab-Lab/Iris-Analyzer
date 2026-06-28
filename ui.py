@@ -37,9 +37,9 @@ _camera_hires = components.declare_component(
 )
 
 
-def hires_camera(key: str = "camera") -> Optional[bytes]:
+def hires_camera(key: str = "camera", *, height: int = 680) -> Optional[bytes]:
     """Render the hi-res webcam component; return JPEG bytes once captured."""
-    data_url = _camera_hires(key=key, default=None)
+    data_url = _camera_hires(key=key, default=None, height=height)
     if not data_url or "," not in data_url:
         return None
     try:
@@ -321,11 +321,12 @@ def _work_titles() -> dict[str, str]:
 
 def _render_camera_step(eye_side: str, model: str) -> None:
     """Dedicated full-page camera capture — rear camera on phones, webcam on laptops."""
+    st.markdown('<div id="camera-screen-anchor"></div>', unsafe_allow_html=True)
     st.caption(
-        "Position the eye in frame. On phones the **rear camera** opens by default — "
-        "use **Flip camera** if needed. On laptops the webcam is used."
+        "Fill the frame with the eye. On phones the **rear camera** opens by default — "
+        "use **Flip camera** if needed."
     )
-    shot = hires_camera(key=f"camera_{st.session_state.get('camera_key', 0)}")
+    shot = hires_camera(key=f"camera_{st.session_state.get('camera_key', 0)}", height=720)
     if shot is not None:
         st.session_state.pending_bytes = shot
         st.session_state.pending_name = "captured.jpg"
@@ -360,6 +361,8 @@ def _render_crop_step(image_bytes: bytes, eye_side: str, model: str) -> None:
     st.markdown("**Adjust Image Size**")
     margin = st.slider("Crop amount", 0, 40, st.session_state.get("crop_margin", 0))
     st.session_state["crop_margin"] = margin
+    if margin > 20:
+        st.warning("Heavy cropping can cut off the iris or pupil and cause analysis to fail.")
     preview = _center_crop_bytes(image_bytes, margin)
     _render_framed_image(preview)
 
